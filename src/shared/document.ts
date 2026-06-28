@@ -10,6 +10,19 @@ export function getText(doc: TextDocument): string {
   return doc.lines.join("\n");
 }
 
+/**
+ * Delete everything from `start` (inclusive) to `end` (exclusive), where
+ * start <= end in document order. Returns a new document; the line containing
+ * `start` is joined with the remainder of the line containing `end`.
+ */
+export function deleteRange(doc: TextDocument, start: Position, end: Position): TextDocument {
+  const lines = doc.lines.slice();
+  const head = (lines[start.line] ?? "").slice(0, start.col);
+  const tail = (lines[end.line] ?? "").slice(end.col);
+  lines.splice(start.line, end.line - start.line + 1, head + tail);
+  return { lines };
+}
+
 /** Insert text into a single line at the given position. Returns a new document. */
 export function insertText(doc: TextDocument, at: Position, text: string): TextDocument {
   const lines = doc.lines.slice();

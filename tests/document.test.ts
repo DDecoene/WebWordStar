@@ -31,3 +31,19 @@ describe("insertText", () => {
     expect(getText(insertText(doc, { line: 0, col: 2 }, "d"))).toBe("bcd");
   });
 });
+
+import { deleteRange } from "../src/shared/document";
+
+describe("deleteRange", () => {
+  it("deletes within a single line", () => {
+    const doc = createDocument("abcdef");
+    const next = deleteRange(doc, { line: 0, col: 1 }, { line: 0, col: 4 });
+    expect(getText(next)).toBe("aef");
+  });
+
+  it("deletes across multiple lines, joining the ends", () => {
+    const doc = createDocument("hello\nbig\nworld");
+    const next = deleteRange(doc, { line: 0, col: 2 }, { line: 2, col: 2 });
+    expect(getText(next)).toBe("herld");
+  });
+});
