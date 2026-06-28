@@ -1,0 +1,12 @@
+{
+  "name": "webwordstar",
+  "version": "1.0.0",
+  "description": "A clean-room browser-based reimplementation of WordStar with real-time collaborative editing.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"(no unit tests yet)\" && exit 0",
+    "test:e2e": "echo \"(no e2e tests yet)\" && exit 0",
+    "build": "echo \"(no build step yet)\" && exit 0"
+  }
+}
