@@ -184,3 +184,41 @@ describe("word movement (^A / ^F)", () => {
     expect(s.cursor).toEqual({ line: 1, col: 0 });
   });
 });
+
+describe("^Q quick movement prefix", () => {
+  it("^Q sets a pending prefix without changing the document", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "q", ctrl: true });
+    expect(s.pending).toBe("quick");
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+  it("^Q S goes to start of line; ^Q D to end of line", () => {
+    let s = createEditorState("hello world");
+    s = { ...s, cursor: { line: 0, col: 5 } };
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "s", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+    expect(s.pending).toBeNull();
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "d", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 11 });
+  });
+  it("^Q R goes to start of document; ^Q C to end of document", () => {
+    let s = createEditorState("one\ntwo\nthree");
+    s = { ...s, cursor: { line: 1, col: 1 } };
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.cursor).toEqual({ line: 2, col: 5 });
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "r", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("an unrecognized key after ^Q just clears the prefix", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "z", ctrl: false });
+    expect(s.pending).toBeNull();
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+});
