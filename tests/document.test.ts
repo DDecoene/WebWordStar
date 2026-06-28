@@ -14,3 +14,20 @@ describe("createDocument / getText", () => {
     expect(getText(doc)).toBe("alpha\nbeta");
   });
 });
+
+import { insertText } from "../src/shared/document";
+
+describe("insertText", () => {
+  it("inserts text within a line and returns a new document", () => {
+    const doc = createDocument("helo");
+    const next = insertText(doc, { line: 0, col: 3 }, "l");
+    expect(getText(next)).toBe("hello");
+    expect(getText(doc)).toBe("helo"); // original unchanged (pure)
+  });
+
+  it("inserts at the start and end of a line", () => {
+    const doc = createDocument("bc");
+    expect(getText(insertText(doc, { line: 0, col: 0 }, "a"))).toBe("abc");
+    expect(getText(insertText(doc, { line: 0, col: 2 }, "d"))).toBe("bcd");
+  });
+});

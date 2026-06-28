@@ -9,3 +9,11 @@ export function createDocument(text = ""): TextDocument {
 export function getText(doc: TextDocument): string {
   return doc.lines.join("\n");
 }
+
+/** Insert text into a single line at the given position. Returns a new document. */
+export function insertText(doc: TextDocument, at: Position, text: string): TextDocument {
+  const lines = doc.lines.slice();
+  const line = lines[at.line] ?? "";
+  lines[at.line] = line.slice(0, at.col) + text + line.slice(at.col);
+  return { lines };
+}
