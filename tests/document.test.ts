@@ -30,6 +30,16 @@ describe("insertText", () => {
     expect(getText(insertText(doc, { line: 0, col: 0 }, "a"))).toBe("abc");
     expect(getText(insertText(doc, { line: 0, col: 2 }, "d"))).toBe("bcd");
   });
+
+  it("throws RangeError when text contains a newline", () => {
+    const doc = createDocument("hello");
+    expect(() => insertText(doc, { line: 0, col: 2 }, "a\nb")).toThrow(RangeError);
+  });
+
+  it("throws RangeError on out-of-range line index", () => {
+    const doc = createDocument("hello");
+    expect(() => insertText(doc, { line: 99, col: 0 }, "x")).toThrow(RangeError);
+  });
 });
 
 import { deleteRange } from "../src/shared/document";
@@ -46,6 +56,17 @@ describe("deleteRange", () => {
     const next = deleteRange(doc, { line: 0, col: 2 }, { line: 2, col: 2 });
     expect(getText(next)).toBe("herld");
   });
+
+  it("is a no-op when start equals end", () => {
+    const doc = createDocument("hello\nworld");
+    const next = deleteRange(doc, { line: 0, col: 3 }, { line: 0, col: 3 });
+    expect(getText(next)).toBe("hello\nworld");
+  });
+
+  it("throws RangeError on out-of-range line index", () => {
+    const doc = createDocument("hello");
+    expect(() => deleteRange(doc, { line: 5, col: 0 }, { line: 5, col: 1 })).toThrow(RangeError);
+  });
 });
 
 import { splitLine, applyIntent } from "../src/shared/document";
@@ -55,6 +76,18 @@ describe("splitLine", () => {
     const doc = createDocument("hello");
     const next = splitLine(doc, { line: 0, col: 2 });
     expect(next.lines).toEqual(["he", "llo"]);
+  });
+
+  it("returns a new document without mutating the original", () => {
+    const doc = createDocument("hello");
+    const next = splitLine(doc, { line: 0, col: 2 });
+    expect(next).not.toBe(doc);
+    expect(doc.lines).toEqual(["hello"]);
+  });
+
+  it("throws RangeError on out-of-range line index", () => {
+    const doc = createDocument("hello");
+    expect(() => splitLine(doc, { line: 5, col: 0 })).toThrow(RangeError);
   });
 });
 

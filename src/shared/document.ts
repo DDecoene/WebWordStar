@@ -14,27 +14,54 @@ export function getText(doc: TextDocument): string {
  * Delete everything from `start` (inclusive) to `end` (exclusive), where
  * start <= end in document order. Returns a new document; the line containing
  * `start` is joined with the remainder of the line containing `end`.
+ *
+ * @throws {RangeError} if `start.line` or `end.line` is out of range.
  */
 export function deleteRange(doc: TextDocument, start: Position, end: Position): TextDocument {
+  if (start.line < 0 || start.line >= doc.lines.length) {
+    throw new RangeError("deleteRange: line index out of range");
+  }
+  if (end.line < 0 || end.line >= doc.lines.length) {
+    throw new RangeError("deleteRange: line index out of range");
+  }
   const lines = doc.lines.slice();
-  const head = (lines[start.line] ?? "").slice(0, start.col);
-  const tail = (lines[end.line] ?? "").slice(end.col);
+  const head = lines[start.line].slice(0, start.col);
+  const tail = lines[end.line].slice(end.col);
   lines.splice(start.line, end.line - start.line + 1, head + tail);
   return { lines };
 }
 
-/** Insert text into a single line at the given position. Returns a new document. */
+/**
+ * Insert text into a single line at the given position. Returns a new document.
+ *
+ * @precondition `text` must not contain newlines; use `splitLine` for line breaks.
+ * @throws {RangeError} if `text` contains a newline character.
+ * @throws {RangeError} if `at.line` is out of range.
+ */
 export function insertText(doc: TextDocument, at: Position, text: string): TextDocument {
+  if (text.includes("\n")) {
+    throw new RangeError("insertText: text must not contain newlines; use splitLine");
+  }
+  if (at.line < 0 || at.line >= doc.lines.length) {
+    throw new RangeError("insertText: line index out of range");
+  }
   const lines = doc.lines.slice();
-  const line = lines[at.line] ?? "";
+  const line = lines[at.line];
   lines[at.line] = line.slice(0, at.col) + text + line.slice(at.col);
   return { lines };
 }
 
-/** Split a line at the position into two lines. Returns a new document. */
+/**
+ * Split a line at the position into two lines. Returns a new document.
+ *
+ * @throws {RangeError} if `at.line` is out of range.
+ */
 export function splitLine(doc: TextDocument, at: Position): TextDocument {
+  if (at.line < 0 || at.line >= doc.lines.length) {
+    throw new RangeError("splitLine: line index out of range");
+  }
   const lines = doc.lines.slice();
-  const line = lines[at.line] ?? "";
+  const line = lines[at.line];
   lines.splice(at.line, 1, line.slice(0, at.col), line.slice(at.col));
   return { lines };
 }
