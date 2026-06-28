@@ -79,3 +79,51 @@ describe("typing printable characters", () => {
     expect(s.document.lines).toEqual([""]);
   });
 });
+
+describe("Enter / Backspace / ^G", () => {
+  it("Enter splits the line and moves to the start of the new line", () => {
+    let s = createEditorState("hello");
+    s = { ...s, cursor: { line: 0, col: 2 } };
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.document.lines).toEqual(["he", "llo"]);
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+  });
+
+  it("Backspace removes the character to the left", () => {
+    let s = createEditorState("abc");
+    s = { ...s, cursor: { line: 0, col: 2 } };
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    expect(s.document.lines).toEqual(["ac"]);
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+  });
+
+  it("Backspace at column 0 joins with the previous line", () => {
+    let s = createEditorState("ab\ncd");
+    s = { ...s, cursor: { line: 1, col: 0 } };
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    expect(s.document.lines).toEqual(["abcd"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+  });
+
+  it("Backspace at the very start is a no-op", () => {
+    let s = createEditorState("ab");
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    expect(s.document.lines).toEqual(["ab"]);
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+
+  it("^G deletes the character to the right", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "g", ctrl: true });
+    expect(s.document.lines).toEqual(["bc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+
+  it("^G at end of line joins the next line", () => {
+    let s = createEditorState("ab\ncd");
+    s = { ...s, cursor: { line: 0, col: 2 } };
+    s = applyKey(s, { key: "g", ctrl: true });
+    expect(s.document.lines).toEqual(["abcd"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+  });
+});
