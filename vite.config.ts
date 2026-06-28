@@ -3,5 +3,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: ".",
   build: { outDir: "dist" },
-  server: { port: 5173 },
+  // Dedicated, uncommon port with strictPort so WebWordStar never collides with
+  // other Vite projects on the default 5173 (and so Playwright is deterministic).
+  server: { port: 5273, strictPort: true },
 });
