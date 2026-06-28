@@ -1,5 +1,7 @@
 import type { EditorState } from "./state";
 
+// NOTE: escapes only text-node characters (&, <, >). Does NOT escape quotes, so it must
+// NOT be used for HTML attribute values.
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

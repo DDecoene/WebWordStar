@@ -151,7 +151,10 @@ function moveDiamond(state: EditorState, key: string): EditorState | null {
   }
 }
 
-/** Resolve the second key of a ^Q quick command. Unknown keys just clear the prefix. */
+/** Resolve the second key of a ^Q quick command. Unknown keys just clear the prefix.
+ * Classic WordStar behavior: the second key may arrive with or without ctrl held — both are accepted.
+ * (The caller already lowercases `key` via ev.key.toLowerCase().)
+ */
 function resolveQuick(state: EditorState, key: string): EditorState {
   const { document, cursor } = state;
   switch (key) {
@@ -174,6 +177,7 @@ function resolveQuick(state: EditorState, key: string): EditorState {
   }
 }
 
+// TODO: Unicode-aware word boundaries (currently ASCII-only via \w)
 const WORD = /\w/;
 
 /** Start of the next word (or next line if past the last word). */
