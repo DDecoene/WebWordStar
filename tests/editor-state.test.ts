@@ -160,3 +160,27 @@ describe("the diamond (character movement)", () => {
     expect(applyKey(end, { key: "d", ctrl: true }).cursor).toEqual({ line: 1, col: 3 });
   });
 });
+
+describe("word movement (^A / ^F)", () => {
+  it("^F moves to the start of the next word on the line", () => {
+    let s = createEditorState("foo bar baz");
+    s = applyKey(s, { key: "f", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 4 });
+    s = applyKey(s, { key: "f", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 8 });
+  });
+  it("^A moves to the start of the current/previous word", () => {
+    let s = createEditorState("foo bar baz");
+    s = { ...s, cursor: { line: 0, col: 9 } };
+    s = applyKey(s, { key: "a", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 8 });
+    s = applyKey(s, { key: "a", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 4 });
+  });
+  it("^F at end of line moves to the start of the next line", () => {
+    let s = createEditorState("ab\ncd");
+    s = { ...s, cursor: { line: 0, col: 2 } };
+    s = applyKey(s, { key: "f", ctrl: true });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+  });
+});
