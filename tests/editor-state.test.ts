@@ -38,3 +38,44 @@ describe("applyKey (unknown keys)", () => {
     expect(next).toEqual(s);
   });
 });
+
+describe("typing printable characters", () => {
+  it("inserts a character and advances the cursor", () => {
+    let s = createEditorState();
+    s = applyKey(s, { key: "h", ctrl: false });
+    s = applyKey(s, { key: "i", ctrl: false });
+    expect(s.document.lines).toEqual(["hi"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+  });
+
+  it("inserts in the middle of existing text", () => {
+    let s = createEditorState("ac");
+    s = { ...s, cursor: { line: 0, col: 1 } };
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+  });
+
+  it("^V toggles overtype mode, which replaces the character under the cursor", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "v", ctrl: true });
+    expect(s.mode).toBe("overtype");
+    s = applyKey(s, { key: "X", ctrl: false });
+    expect(s.document.lines).toEqual(["Xbc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+  });
+
+  it("overtype at end of line appends rather than replacing past the end", () => {
+    let s = createEditorState("ab");
+    s = { ...s, mode: "overtype", cursor: { line: 0, col: 2 } };
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 3 });
+  });
+
+  it("ignores control-modified keys as text (they are commands, not input)", () => {
+    let s = createEditorState();
+    s = applyKey(s, { key: "a", ctrl: true });
+    expect(s.document.lines).toEqual([""]);
+  });
+});
