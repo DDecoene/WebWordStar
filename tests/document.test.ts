@@ -47,3 +47,37 @@ describe("deleteRange", () => {
     expect(getText(next)).toBe("herld");
   });
 });
+
+import { splitLine, applyIntent } from "../src/shared/document";
+
+describe("splitLine", () => {
+  it("splits a line into two at the position", () => {
+    const doc = createDocument("hello");
+    const next = splitLine(doc, { line: 0, col: 2 });
+    expect(next.lines).toEqual(["he", "llo"]);
+  });
+});
+
+describe("applyIntent", () => {
+  it("dispatches insertText", () => {
+    const doc = createDocument("ac");
+    const next = applyIntent(doc, { kind: "insertText", at: { line: 0, col: 1 }, text: "b" });
+    expect(getText(next)).toBe("abc");
+  });
+
+  it("dispatches deleteRange", () => {
+    const doc = createDocument("abc");
+    const next = applyIntent(doc, {
+      kind: "deleteRange",
+      start: { line: 0, col: 0 },
+      end: { line: 0, col: 1 },
+    });
+    expect(getText(next)).toBe("bc");
+  });
+
+  it("dispatches splitLine", () => {
+    const doc = createDocument("ab");
+    const next = applyIntent(doc, { kind: "splitLine", at: { line: 0, col: 1 } });
+    expect(next.lines).toEqual(["a", "b"]);
+  });
+});
