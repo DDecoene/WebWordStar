@@ -1,0 +1,42 @@
+/** A zero-based cursor position: line index and column (character) index. */
+export interface Position {
+  line: number;
+  col: number;
+}
+
+/**
+ * The document model: text as an array of lines (no trailing newline characters;
+ * the array boundaries ARE the line breaks). This is the single source of truth.
+ * Formatting runs and dot commands are added in later stages.
+ */
+export interface TextDocument {
+  lines: string[];
+}
+
+/** Edit intents: what a client asks the server to do. Pure data. */
+export type EditIntent =
+  | { kind: "insertText"; at: Position; text: string }
+  | { kind: "deleteRange"; start: Position; end: Position }
+  | { kind: "splitLine"; at: Position };
+
+/** An applied, ordered mutation broadcast by the server authority. */
+export interface AppliedOp {
+  docId: string;
+  revision: number;
+  intent: EditIntent;
+}
+
+/** Presence of a peer editing the same document. */
+export interface Presence {
+  docId: string;
+  userId: string;
+  name: string;
+  cursor: Position;
+}
+
+/** Full document snapshot sent to a client on join. */
+export interface Snapshot {
+  docId: string;
+  revision: number;
+  document: TextDocument;
+}

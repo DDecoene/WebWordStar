@@ -5,8 +5,18 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "echo \"(no unit tests yet)\" && exit 0",
-    "test:e2e": "echo \"(no e2e tests yet)\" && exit 0",
-    "build": "echo \"(no build step yet)\" && exit 0"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
   }
 }
