@@ -1,3 +1,4 @@
+import "./style.css";
 import { createEditorState, applyKey, type EditorState } from "./editor/state";
 import { renderEditor } from "./editor/render";
 
