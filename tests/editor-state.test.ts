@@ -127,3 +127,36 @@ describe("Enter / Backspace / ^G", () => {
     expect(s.cursor).toEqual({ line: 0, col: 2 });
   });
 });
+
+describe("the diamond (character movement)", () => {
+  const doc = "abc\ndef";
+  it("^D moves right, wrapping to the next line at end of line", () => {
+    let s = createEditorState(doc);
+    s = { ...s, cursor: { line: 0, col: 3 } };
+    s = applyKey(s, { key: "d", ctrl: true });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+  });
+  it("^S moves left, wrapping to the previous line end", () => {
+    let s = createEditorState(doc);
+    s = { ...s, cursor: { line: 1, col: 0 } };
+    s = applyKey(s, { key: "s", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 3 });
+  });
+  it("^E moves up, clamping the column to the shorter line", () => {
+    let s = createEditorState("ab\nlonger");
+    s = { ...s, cursor: { line: 1, col: 6 } };
+    s = applyKey(s, { key: "e", ctrl: true });
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+  });
+  it("^X moves down", () => {
+    let s = createEditorState(doc);
+    s = applyKey(s, { key: "x", ctrl: true });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+  });
+  it("^S at the very start and ^D at the very end are no-ops", () => {
+    let start = createEditorState(doc);
+    expect(applyKey(start, { key: "s", ctrl: true }).cursor).toEqual({ line: 0, col: 0 });
+    let end = { ...createEditorState(doc), cursor: { line: 1, col: 3 } };
+    expect(applyKey(end, { key: "d", ctrl: true }).cursor).toEqual({ line: 1, col: 3 });
+  });
+});
