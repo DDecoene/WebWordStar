@@ -185,6 +185,133 @@ describe("word movement (^A / ^F)", () => {
   });
 });
 
+import { orderedBlock } from "../src/editor/state";
+
+describe("^K block marking", () => {
+  it("^K sets a pending block prefix without changing the document", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    expect(s.pending).toBe("block");
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+  it("^KB marks block begin at the cursor; ^KK marks block end", () => {
+    let s = createEditorState("hello world");
+    s = { ...s, cursor: { line: 0, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.blockStart).toEqual({ line: 0, col: 0 });
+    expect(s.pending).toBeNull();
+    s = { ...s, cursor: { line: 0, col: 5 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    expect(s.blockEnd).toEqual({ line: 0, col: 5 });
+  });
+  it("orderedBlock returns sorted markers or null", () => {
+    let s = createEditorState("abcdef");
+    expect(orderedBlock(s)).toBeNull();
+    s = { ...s, blockStart: { line: 0, col: 4 }, blockEnd: { line: 0, col: 1 } };
+    expect(orderedBlock(s)).toEqual({ start: { line: 0, col: 1 }, end: { line: 0, col: 4 } });
+  });
+  it("^KH toggles the block hidden flag", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.hideBlock).toBe(true);
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.hideBlock).toBe(false);
+  });
+});
+
+describe("^KC copy / ^KY delete", () => {
+  function markBlock(s: ReturnType<typeof createEditorState>, start: { line: number; col: number }, end: { line: number; col: number }) {
+    s = { ...s, cursor: start };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = { ...s, cursor: end };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    return s;
+  }
+
+  it("^KC copies the block to the cursor and clears the markers", () => {
+    let s = createEditorState("abcXY");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 0, col: 3 }); // "abc"
+    s = { ...s, cursor: { line: 0, col: 5 } }; // end of line
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abcXYabc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 8 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("^KC copies a multi-line block", () => {
+    let s = createEditorState("ab\ncd\n");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 1, col: 2 }); // "ab\ncd"
+    s = { ...s, cursor: { line: 2, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["ab", "cd", "ab", "cd"]);
+    expect(s.cursor).toEqual({ line: 3, col: 2 });
+  });
+
+  it("^KY deletes the block, moves the cursor to its start, and clears markers", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "y", ctrl: false });
+    expect(s.document.lines).toEqual(["aef"]);
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("^KC with cursor inside the block copies and clears both markers", () => {
+    // "abcdef", block is col 1..4 ("bcd"), cursor at col 2 (inside the block)
+    // getRange gives "bcd"; insertMultiline at col 2 into "abcdef" yields "ab" + "bcd" + "cdef" = "abbcdcdef"
+    // cursor ends at col 2 + 3 = col 5
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = { ...s, cursor: { line: 0, col: 2 } }; // inside block
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abbcdcdef"]);
+    expect(s.cursor).toEqual({ line: 0, col: 5 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("^KC with no block set is a no-op", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+});
+
+describe("arrow-key movement alternates", () => {
+  it("ArrowRight / ArrowLeft move like ^D / ^S", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("ArrowDown / ArrowUp move like ^X / ^E", () => {
+    let s = createEditorState("ab\ncd");
+    s = applyKey(s, { key: "ArrowDown", ctrl: false });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+    s = applyKey(s, { key: "ArrowUp", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("arrow keys do not insert text", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.document.lines).toEqual([""]);
+  });
+});
+
 describe("^Q quick movement prefix", () => {
   it("^Q sets a pending prefix without changing the document", () => {
     let s = createEditorState("abc");

@@ -42,3 +42,27 @@ describe("renderEditor", () => {
     expect(html).toContain("a&lt;b&gt;&amp;c");
   });
 });
+
+describe("block highlight rendering", () => {
+  it("wraps the marked block region in a block span", () => {
+    const s = {
+      ...createEditorState("abcdef"),
+      cursor: { line: 0, col: 6 }, // keep cursor out of the block for a clean assertion
+      blockStart: { line: 0, col: 1 },
+      blockEnd: { line: 0, col: 4 },
+    };
+    const html = renderEditor(s);
+    expect(html).toContain('<span class="block">bcd</span>');
+  });
+
+  it("does not render the highlight when hideBlock is true", () => {
+    const s = {
+      ...createEditorState("abcdef"),
+      cursor: { line: 0, col: 6 },
+      blockStart: { line: 0, col: 1 },
+      blockEnd: { line: 0, col: 4 },
+      hideBlock: true,
+    };
+    expect(renderEditor(s)).not.toContain('class="block"');
+  });
+});

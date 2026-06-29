@@ -114,3 +114,31 @@ describe("applyIntent", () => {
     expect(next.lines).toEqual(["a", "b"]);
   });
 });
+
+import { getRange, insertMultiline } from "../src/shared/document";
+
+describe("getRange", () => {
+  it("returns text within a single line", () => {
+    const doc = createDocument("abcdef");
+    expect(getRange(doc, { line: 0, col: 1 }, { line: 0, col: 4 })).toBe("bcd");
+  });
+  it("returns text across multiple lines joined by newlines", () => {
+    const doc = createDocument("hello\nbig\nworld");
+    expect(getRange(doc, { line: 0, col: 2 }, { line: 2, col: 2 })).toBe("llo\nbig\nwo");
+  });
+});
+
+describe("insertMultiline", () => {
+  it("inserts single-line text and reports the end position", () => {
+    const doc = createDocument("ad");
+    const r = insertMultiline(doc, { line: 0, col: 1 }, "bc");
+    expect(getText(r.document)).toBe("abcd");
+    expect(r.end).toEqual({ line: 0, col: 3 });
+  });
+  it("inserts multi-line text, splitting the target line", () => {
+    const doc = createDocument("aZ");
+    const r = insertMultiline(doc, { line: 0, col: 1 }, "b\ncc\nd");
+    expect(r.document.lines).toEqual(["ab", "cc", "dZ"]);
+    expect(r.end).toEqual({ line: 2, col: 1 });
+  });
+});
