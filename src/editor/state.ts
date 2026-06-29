@@ -13,6 +13,7 @@ export interface EditorState {
   blockStart: Position | null;
   blockEnd: Position | null;
   hideBlock: boolean;
+  prompt: { label: string; buffer: string } | null;
 }
 
 export interface KeyEvent {
@@ -30,6 +31,7 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     blockStart: null,
     blockEnd: null,
     hideBlock: false,
+    prompt: null,
   };
 }
 
@@ -49,6 +51,9 @@ function isPrintable(ev: KeyEvent): boolean {
 }
 
 export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
+  if (state.prompt) {
+    return applyPromptKey(state, ev);
+  }
   // If a prefix is pending, this key completes the command.
   if (state.pending === "quick") {
     return resolveQuick({ ...state, pending: null }, ev.key.toLowerCase());
@@ -220,6 +225,9 @@ function resolveBlock(state: EditorState, key: string): EditorState {
       return copyBlock(state);
     case "y":
       return deleteBlock(state);
+    case "n":
+      // Start empty; an empty commit keeps the current name (see applyPromptKey).
+      return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "" } };
     default:
       return state; // prefix already cleared by caller
   }
@@ -268,4 +276,23 @@ function prevWord(doc: TextDocument, pos: Position): Position {
   while (c > 0 && !WORD.test(line[c - 1]!)) c--; // skip gap to the left
   while (c > 0 && WORD.test(line[c - 1]!)) c--; // skip to word start
   return { line: pos.line, col: c };
+}
+
+/** Handle a keystroke while the title/command prompt is active. */
+function applyPromptKey(state: EditorState, ev: KeyEvent): EditorState {
+  const prompt = state.prompt!;
+  if (!ev.ctrl && ev.key === "Enter") {
+    const filename = prompt.buffer.length > 0 ? prompt.buffer : state.filename;
+    return { ...state, filename, prompt: null };
+  }
+  if (!ev.ctrl && ev.key === "Escape") {
+    return { ...state, prompt: null };
+  }
+  if (!ev.ctrl && ev.key === "Backspace") {
+    return { ...state, prompt: { ...prompt, buffer: prompt.buffer.slice(0, -1) } };
+  }
+  if (!ev.ctrl && ev.key.length === 1) {
+    return { ...state, prompt: { ...prompt, buffer: prompt.buffer + ev.key } };
+  }
+  return state;
 }

@@ -24,6 +24,8 @@ pnpm-debug.log*
 *.sqlite3
 *.db
 
+data/
+
 # Coverage / cache
 coverage/
 .cache/

@@ -43,6 +43,30 @@ describe("renderEditor", () => {
   });
 });
 
+describe("prompt rendering", () => {
+  it("shows the prompt label and buffer in the status area when a prompt is active", () => {
+    const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc" } };
+    const html = renderEditor(s);
+    expect(html).toContain("DOCUMENT NAME:");
+    expect(html).toContain("My Doc");
+  });
+
+  it("shows the normal status line when no prompt is active", () => {
+    const s = createEditorState("body", "UNTITLED");
+    const html = renderEditor(s);
+    expect(html).toContain("LINE 1");
+    expect(html).not.toContain("DOCUMENT NAME:");
+  });
+
+  it("suppresses the document cursor while a prompt is active (no double caret)", () => {
+    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "" } };
+    const html = renderEditor(s);
+    // The only caret is the prompt's, in the status bar — the screen has none.
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).not.toContain('class="cursor"');
+  });
+});
+
 describe("block highlight rendering", () => {
   it("wraps the marked block region in a block span", () => {
     const s = {

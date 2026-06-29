@@ -71,15 +71,32 @@ function renderLine(
 export function renderEditor(state: EditorState): string {
   const { document, cursor, mode, filename } = state;
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
-  const status = `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`;
+
+  // When a prompt is active, the status bar becomes an editable command line with
+  // a visible block caret after the typed text. Otherwise it is the normal status line.
+  let statusHtml: string;
+  if (state.prompt) {
+    statusHtml =
+      `${escapeHtml(state.prompt.label)} ${escapeHtml(state.prompt.buffer)}` +
+      `<span class="cursor"> </span>`;
+  } else {
+    statusHtml = escapeHtml(
+      `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`,
+    );
+  }
+
   const block = state.hideBlock ? null : orderedBlock(state);
 
+  // While a prompt is active the caret lives in the command line, so the document
+  // cursor is suppressed (line -1 never matches a row) to avoid two blinking carets.
+  const cursorLine = state.prompt ? -1 : cursor.line;
+
   const screen = document.lines
-    .map((text, i) => renderLine(text, i, cursor.line, cursor.col, block))
+    .map((text, i) => renderLine(text, i, cursorLine, cursor.col, block))
     .join("\n");
 
   return (
-    `<div class="status" data-testid="status">${escapeHtml(status)}</div>` +
+    `<div class="status" data-testid="status">${statusHtml}</div>` +
     `<pre class="screen" data-testid="screen">${screen}</pre>`
   );
 }
