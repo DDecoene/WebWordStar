@@ -274,6 +274,28 @@ describe("^KC copy / ^KY delete", () => {
   });
 });
 
+describe("arrow-key movement alternates", () => {
+  it("ArrowRight / ArrowLeft move like ^D / ^S", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("ArrowDown / ArrowUp move like ^X / ^E", () => {
+    let s = createEditorState("ab\ncd");
+    s = applyKey(s, { key: "ArrowDown", ctrl: false });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+    s = applyKey(s, { key: "ArrowUp", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("arrow keys do not insert text", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.document.lines).toEqual([""]);
+  });
+});
+
 describe("^Q quick movement prefix", () => {
   it("^Q sets a pending prefix without changing the document", () => {
     let s = createEditorState("abc");

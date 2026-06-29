@@ -13,7 +13,7 @@ if (app) {
 
   // Keys that are meaningful to the editor; everything else falls through to the browser.
   const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f", "b", "c", "y", "h"]);
-  const NAMED = new Set(["Enter", "Backspace"]);
+  const NAMED = new Set(["Enter", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
   window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;

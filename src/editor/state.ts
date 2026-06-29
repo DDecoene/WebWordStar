@@ -90,6 +90,18 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
     if (moved) return moved;
   }
 
+  // Arrow keys are modern alternates for the diamond's character moves.
+  const ARROWS: Record<string, string> = {
+    ArrowUp: "e",
+    ArrowDown: "x",
+    ArrowLeft: "s",
+    ArrowRight: "d",
+  };
+  if (!ev.ctrl && ev.key in ARROWS) {
+    const moved = moveDiamond(state, ARROWS[ev.key]!);
+    if (moved) return moved;
+  }
+
   if (isPrintable(ev)) {
     return typeChar(state, ev.key);
   }
