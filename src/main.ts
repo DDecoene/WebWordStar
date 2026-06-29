@@ -1,30 +1,67 @@
 import "./style.css";
 import { createEditorState, applyKey, type EditorState } from "./editor/state";
 import { renderEditor } from "./editor/render";
+import { getText } from "./shared/document";
+import { WsClient } from "./ws/WsClient";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (app) {
+  // Resolve the document id from the URL; create one if absent.
+  const params = new URLSearchParams(window.location.search);
+  let docId = params.get("doc");
+  if (!docId) {
+    docId = crypto.randomUUID();
+    params.set("doc", docId);
+    window.location.replace(`${window.location.pathname}?${params.toString()}`);
+  }
+
   let state: EditorState = createEditorState("", "UNTITLED");
 
   const paint = () => {
     app.innerHTML = renderEditor(state);
   };
 
-  // Keys that are meaningful to the editor; everything else falls through to the browser.
+  const wsUrl = `${window.location.origin.replace(/^http/, "ws")}/ws`;
+  const client = new WsClient(wsUrl, docId!, (content, title) => {
+    state = createEditorState(content, title || "UNTITLED");
+    paint();
+  });
+  client.connect();
+
+  // Debounced save: ~500 ms after edits settle.
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => client.save(getText(state.document)), 500);
+  };
+  window.addEventListener("beforeunload", () => client.save(getText(state.document)));
+
   const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f"]);
-  const NAMED = new Set(["Enter", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+  const NAMED = new Set([
+    "Enter",
+    "Backspace",
+    "Escape",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+  ]);
 
   window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
-    // AltGr sets both ctrlKey and altKey on many keyboard layouts — don't treat it as Ctrl.
     const ctrl = e.ctrlKey && !e.altKey;
     const isCtrlCommand = ctrl && CTRL_COMMANDS.has(e.key.toLowerCase());
     const isNamed = !ctrl && NAMED.has(e.key);
     const isPrintable = !ctrl && !e.altKey && !e.metaKey && e.key.length === 1;
     if (!isCtrlCommand && !isNamed && !isPrintable) return;
     e.preventDefault();
+
+    const prev = state;
     state = applyKey(state, { key: e.key, ctrl });
+
+    if (state.document !== prev.document) scheduleSave(); // content changed
+    if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
     paint();
   });
 
