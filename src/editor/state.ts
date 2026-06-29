@@ -2,7 +2,7 @@ import type { Position, TextDocument } from "../shared/types";
 import { createDocument, insertText, deleteRange, splitLine } from "../shared/document";
 
 export type EditorMode = "insert" | "overtype";
-export type Pending = null | "quick"; // "quick" = the ^Q prefix is active
+export type Pending = null | "quick" | "block"; // ^Q quick, ^K block
 
 export interface EditorState {
   document: TextDocument;
@@ -10,6 +10,9 @@ export interface EditorState {
   mode: EditorMode;
   pending: Pending;
   filename: string;
+  blockStart: Position | null;
+  blockEnd: Position | null;
+  hideBlock: boolean;
 }
 
 export interface KeyEvent {
@@ -24,6 +27,9 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     mode: "insert",
     pending: null,
     filename,
+    blockStart: null,
+    blockEnd: null,
+    hideBlock: false,
   };
 }
 
@@ -43,14 +49,22 @@ function isPrintable(ev: KeyEvent): boolean {
 }
 
 export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
-  // If a prefix is pending, this key completes the quick command.
+  // If a prefix is pending, this key completes the command.
   if (state.pending === "quick") {
     return resolveQuick({ ...state, pending: null }, ev.key.toLowerCase());
+  }
+  if (state.pending === "block") {
+    return resolveBlock({ ...state, pending: null }, ev.key.toLowerCase());
   }
 
   // ^Q — begin a quick-movement prefix
   if (ev.ctrl && ev.key.toLowerCase() === "q") {
     return { ...state, pending: "quick" };
+  }
+
+  // ^K — begin a block command prefix
+  if (ev.ctrl && ev.key.toLowerCase() === "k") {
+    return { ...state, pending: "block" };
   }
 
   // ^V — toggle insert/overtype
@@ -172,6 +186,30 @@ function resolveQuick(state: EditorState, key: string): EditorState {
       const last = document.lines.length - 1;
       return { ...state, cursor: { line: last, col: lineLength(document, last) } };
     }
+    default:
+      return state; // prefix already cleared by caller
+  }
+}
+
+/** Return the block markers sorted into document order, or null if either is unset. */
+export function orderedBlock(state: EditorState): { start: Position; end: Position } | null {
+  const { blockStart, blockEnd } = state;
+  if (!blockStart || !blockEnd) return null;
+  const aFirst =
+    blockStart.line < blockEnd.line ||
+    (blockStart.line === blockEnd.line && blockStart.col <= blockEnd.col);
+  return aFirst ? { start: blockStart, end: blockEnd } : { start: blockEnd, end: blockStart };
+}
+
+/** Resolve the second key of a ^K block command. Unknown keys just clear the prefix. */
+function resolveBlock(state: EditorState, key: string): EditorState {
+  switch (key) {
+    case "b":
+      return { ...state, blockStart: state.cursor };
+    case "k":
+      return { ...state, blockEnd: state.cursor };
+    case "h":
+      return { ...state, hideBlock: !state.hideBlock };
     default:
       return state; // prefix already cleared by caller
   }

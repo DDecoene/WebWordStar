@@ -185,6 +185,44 @@ describe("word movement (^A / ^F)", () => {
   });
 });
 
+import { orderedBlock } from "../src/editor/state";
+
+describe("^K block marking", () => {
+  it("^K sets a pending block prefix without changing the document", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    expect(s.pending).toBe("block");
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+  it("^KB marks block begin at the cursor; ^KK marks block end", () => {
+    let s = createEditorState("hello world");
+    s = { ...s, cursor: { line: 0, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.blockStart).toEqual({ line: 0, col: 0 });
+    expect(s.pending).toBeNull();
+    s = { ...s, cursor: { line: 0, col: 5 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    expect(s.blockEnd).toEqual({ line: 0, col: 5 });
+  });
+  it("orderedBlock returns sorted markers or null", () => {
+    let s = createEditorState("abcdef");
+    expect(orderedBlock(s)).toBeNull();
+    s = { ...s, blockStart: { line: 0, col: 4 }, blockEnd: { line: 0, col: 1 } };
+    expect(orderedBlock(s)).toEqual({ start: { line: 0, col: 1 }, end: { line: 0, col: 4 } });
+  });
+  it("^KH toggles the block hidden flag", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.hideBlock).toBe(true);
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.hideBlock).toBe(false);
+  });
+});
+
 describe("^Q quick movement prefix", () => {
   it("^Q sets a pending prefix without changing the document", () => {
     let s = createEditorState("abc");
