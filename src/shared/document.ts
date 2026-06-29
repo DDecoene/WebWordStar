@@ -66,6 +66,48 @@ export function splitLine(doc: TextDocument, at: Position): TextDocument {
   return { lines };
 }
 
+/** Return the text between start (inclusive) and end (exclusive), in document order, joined by "\n". */
+export function getRange(doc: TextDocument, start: Position, end: Position): string {
+  if (start.line === end.line) {
+    return (doc.lines[start.line] ?? "").slice(start.col, end.col);
+  }
+  const first = (doc.lines[start.line] ?? "").slice(start.col);
+  const middle = doc.lines.slice(start.line + 1, end.line);
+  const last = (doc.lines[end.line] ?? "").slice(0, end.col);
+  return [first, ...middle, last].join("\n");
+}
+
+/**
+ * Insert text (which may contain newlines) at `at`. Returns the new document and
+ * the end position just past the inserted text.
+ */
+export function insertMultiline(
+  doc: TextDocument,
+  at: Position,
+  text: string,
+): { document: TextDocument; end: Position } {
+  const parts = text.split("\n");
+  const lines = doc.lines.slice();
+  const target = lines[at.line] ?? "";
+  const head = target.slice(0, at.col);
+  const tail = target.slice(at.col);
+
+  if (parts.length === 1) {
+    lines[at.line] = head + parts[0] + tail;
+    return { document: { lines }, end: { line: at.line, col: at.col + parts[0]!.length } };
+  }
+
+  const firstLine = head + parts[0];
+  const lastPart = parts[parts.length - 1]!;
+  const lastLine = lastPart + tail;
+  const middle = parts.slice(1, -1);
+  lines.splice(at.line, 1, firstLine, ...middle, lastLine);
+  return {
+    document: { lines },
+    end: { line: at.line + parts.length - 1, col: lastPart.length },
+  };
+}
+
 /** Apply any edit intent to the document, returning a new document. */
 export function applyIntent(doc: TextDocument, intent: EditIntent): TextDocument {
   switch (intent.kind) {
