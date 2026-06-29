@@ -80,6 +80,9 @@ export function getRange(doc: TextDocument, start: Position, end: Position): str
 /**
  * Insert text (which may contain newlines) at `at`. Returns the new document and
  * the end position just past the inserted text.
+ *
+ * @precondition `at.line` must be a valid existing line index (`0 <= at.line < doc.lines.length`);
+ *   callers (the editor cursor) always satisfy this.
  */
 export function insertMultiline(
   doc: TextDocument,

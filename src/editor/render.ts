@@ -34,7 +34,7 @@ function cellsToHtml(cells: { ch: string; cls: CellClass }[]): string {
 /** Is column `col` on `line` inside the ordered block [start, end)? Multi-line blocks
  *  cover from start.col on the first line to end.col on the last, full lines in between. */
 function inBlock(
-  block: { start: { line: number; col: number }; end: { line: number; col: number } } | null,
+  block: ReturnType<typeof orderedBlock>,
   line: number,
   col: number,
   lineLen: number,

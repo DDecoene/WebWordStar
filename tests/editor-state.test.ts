@@ -264,6 +264,22 @@ describe("^KC copy / ^KY delete", () => {
     expect(s.document.lines).toEqual(["aef"]);
     expect(s.cursor).toEqual({ line: 0, col: 1 });
     expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("^KC with cursor inside the block copies and clears both markers", () => {
+    // "abcdef", block is col 1..4 ("bcd"), cursor at col 2 (inside the block)
+    // getRange gives "bcd"; insertMultiline at col 2 into "abcdef" yields "ab" + "bcd" + "cdef" = "abbcdcdef"
+    // cursor ends at col 2 + 3 = col 5
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = { ...s, cursor: { line: 0, col: 2 } }; // inside block
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abbcdcdef"]);
+    expect(s.cursor).toEqual({ line: 0, col: 5 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
   });
 
   it("^KC with no block set is a no-op", () => {

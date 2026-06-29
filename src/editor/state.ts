@@ -91,12 +91,6 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   }
 
   // Arrow keys are modern alternates for the diamond's character moves.
-  const ARROWS: Record<string, string> = {
-    ArrowUp: "e",
-    ArrowDown: "x",
-    ArrowLeft: "s",
-    ArrowRight: "d",
-  };
   if (!ev.ctrl && ev.key in ARROWS) {
     const moved = moveDiamond(state, ARROWS[ev.key]!);
     if (moved) return moved;
@@ -248,6 +242,14 @@ function deleteBlock(state: EditorState): EditorState {
 
 // TODO: Unicode-aware word boundaries (currently ASCII-only via \w)
 const WORD = /\w/;
+
+/** Arrow-key to diamond-move character mapping (hoisted to avoid re-allocation on every keystroke). */
+const ARROWS: Record<string, string> = {
+  ArrowUp: "e",
+  ArrowDown: "x",
+  ArrowLeft: "s",
+  ArrowRight: "d",
+};
 
 /** Start of the next word (or next line if past the last word). */
 function nextWord(doc: TextDocument, pos: Position): Position {
