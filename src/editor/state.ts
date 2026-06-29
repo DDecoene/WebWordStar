@@ -1,5 +1,5 @@
 import type { Position, TextDocument } from "../shared/types";
-import { createDocument, insertText, deleteRange, splitLine } from "../shared/document";
+import { createDocument, insertText, deleteRange, splitLine, getRange, insertMultiline } from "../shared/document";
 
 export type EditorMode = "insert" | "overtype";
 export type Pending = null | "quick" | "block"; // ^Q quick, ^K block
@@ -210,9 +210,28 @@ function resolveBlock(state: EditorState, key: string): EditorState {
       return { ...state, blockEnd: state.cursor };
     case "h":
       return { ...state, hideBlock: !state.hideBlock };
+    case "c":
+      return copyBlock(state);
+    case "y":
+      return deleteBlock(state);
     default:
       return state; // prefix already cleared by caller
   }
+}
+
+function copyBlock(state: EditorState): EditorState {
+  const block = orderedBlock(state);
+  if (!block) return state;
+  const text = getRange(state.document, block.start, block.end);
+  const { document, end } = insertMultiline(state.document, state.cursor, text);
+  return { ...state, document, cursor: end, blockStart: null, blockEnd: null };
+}
+
+function deleteBlock(state: EditorState): EditorState {
+  const block = orderedBlock(state);
+  if (!block) return state;
+  const document = deleteRange(state.document, block.start, block.end);
+  return { ...state, document, cursor: block.start, blockStart: null, blockEnd: null };
 }
 
 // TODO: Unicode-aware word boundaries (currently ASCII-only via \w)

@@ -223,6 +223,57 @@ describe("^K block marking", () => {
   });
 });
 
+describe("^KC copy / ^KY delete", () => {
+  function markBlock(s: ReturnType<typeof createEditorState>, start: { line: number; col: number }, end: { line: number; col: number }) {
+    s = { ...s, cursor: start };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = { ...s, cursor: end };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    return s;
+  }
+
+  it("^KC copies the block to the cursor and clears the markers", () => {
+    let s = createEditorState("abcXY");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 0, col: 3 }); // "abc"
+    s = { ...s, cursor: { line: 0, col: 5 } }; // end of line
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abcXYabc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 8 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("^KC copies a multi-line block", () => {
+    let s = createEditorState("ab\ncd\n");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 1, col: 2 }); // "ab\ncd"
+    s = { ...s, cursor: { line: 2, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["ab", "cd", "ab", "cd"]);
+    expect(s.cursor).toEqual({ line: 3, col: 2 });
+  });
+
+  it("^KY deletes the block, moves the cursor to its start, and clears markers", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "y", ctrl: false });
+    expect(s.document.lines).toEqual(["aef"]);
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+    expect(s.blockStart).toBeNull();
+  });
+
+  it("^KC with no block set is a no-op", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+});
+
 describe("^Q quick movement prefix", () => {
   it("^Q sets a pending prefix without changing the document", () => {
     let s = createEditorState("abc");
