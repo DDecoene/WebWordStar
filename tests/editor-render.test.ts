@@ -57,6 +57,14 @@ describe("prompt rendering", () => {
     expect(html).toContain("LINE 1");
     expect(html).not.toContain("DOCUMENT NAME:");
   });
+
+  it("suppresses the document cursor while a prompt is active (no double caret)", () => {
+    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "" } };
+    const html = renderEditor(s);
+    // The only caret is the prompt's, in the status bar — the screen has none.
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).not.toContain('class="cursor"');
+  });
 });
 
 describe("block highlight rendering", () => {

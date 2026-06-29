@@ -87,8 +87,12 @@ export function renderEditor(state: EditorState): string {
 
   const block = state.hideBlock ? null : orderedBlock(state);
 
+  // While a prompt is active the caret lives in the command line, so the document
+  // cursor is suppressed (line -1 never matches a row) to avoid two blinking carets.
+  const cursorLine = state.prompt ? -1 : cursor.line;
+
   const screen = document.lines
-    .map((text, i) => renderLine(text, i, cursor.line, cursor.col, block))
+    .map((text, i) => renderLine(text, i, cursorLine, cursor.col, block))
     .join("\n");
 
   return (
