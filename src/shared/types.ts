@@ -40,3 +40,13 @@ export interface Snapshot {
   revision: number;
   document: TextDocument;
 }
+
+/** Messages the browser sends to the server. */
+export type ClientMessage =
+  | { type: "join"; docId: string }
+  | { type: "save"; docId: string; content: string }
+  | { type: "setTitle"; docId: string; title: string };
+
+/** Messages the server sends to the browser. */
+export type ServerMessage =
+  | { type: "snapshot"; docId: string; content: string; title: string };
