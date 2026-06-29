@@ -226,7 +226,8 @@ function resolveBlock(state: EditorState, key: string): EditorState {
     case "y":
       return deleteBlock(state);
     case "n":
-      return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: state.filename } };
+      // Start empty; an empty commit keeps the current name (see applyPromptKey).
+      return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "" } };
     default:
       return state; // prefix already cleared by caller
   }

@@ -71,9 +71,20 @@ function renderLine(
 export function renderEditor(state: EditorState): string {
   const { document, cursor, mode, filename } = state;
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
-  const status = state.prompt
-    ? `${state.prompt.label} ${state.prompt.buffer}`
-    : `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`;
+
+  // When a prompt is active, the status bar becomes an editable command line with
+  // a visible block caret after the typed text. Otherwise it is the normal status line.
+  let statusHtml: string;
+  if (state.prompt) {
+    statusHtml =
+      `${escapeHtml(state.prompt.label)} ${escapeHtml(state.prompt.buffer)}` +
+      `<span class="cursor"> </span>`;
+  } else {
+    statusHtml = escapeHtml(
+      `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`,
+    );
+  }
+
   const block = state.hideBlock ? null : orderedBlock(state);
 
   const screen = document.lines
@@ -81,7 +92,7 @@ export function renderEditor(state: EditorState): string {
     .join("\n");
 
   return (
-    `<div class="status" data-testid="status">${escapeHtml(status)}</div>` +
+    `<div class="status" data-testid="status">${statusHtml}</div>` +
     `<pre class="screen" data-testid="screen">${screen}</pre>`
   );
 }
