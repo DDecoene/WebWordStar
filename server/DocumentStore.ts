@@ -33,7 +33,7 @@ export class DocumentStore {
 
   create(id: string): DocRecord {
     this.db
-      .prepare("INSERT INTO documents (id, title, content, updated_at) VALUES (?, 'UNTITLED', '', ?)")
+      .prepare("INSERT OR IGNORE INTO documents (id, title, content, updated_at) VALUES (?, 'UNTITLED', '', ?)")
       .run(id, Date.now());
     return { title: "UNTITLED", content: "" };
   }

@@ -39,7 +39,12 @@ if (app) {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => client.save(getText(state.document)), 500);
   };
-  window.addEventListener("beforeunload", () => client.save(getText(state.document)));
+  // Best-effort flush on unload: clear debounce and save immediately.
+  // WebSocket delivery on unload is best-effort; a dedicated HTTP save endpoint is a future improvement.
+  window.addEventListener("beforeunload", () => {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    client.save(getText(state.document));
+  });
 
   const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f"]);
   const NAMED = new Set([

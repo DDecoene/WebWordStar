@@ -9,6 +9,7 @@ export class WsClient {
   private ws: WebSocket | null = null;
   private buffer: ClientMessage[] = [];
   private joinedOnce = false;
+  private retryDelay = 1000;
 
   constructor(
     private url: string,
@@ -17,23 +18,32 @@ export class WsClient {
   ) {}
 
   connect(): void {
+    if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
     const ws = new WebSocket(this.url);
     this.ws = ws;
     ws.addEventListener("open", () => {
+      this.retryDelay = 1000;
       this.transmit({ type: "join", docId: this.docId });
       for (const m of this.buffer) this.transmit(m);
       this.buffer = [];
     });
     ws.addEventListener("message", (e) => {
-      const msg = JSON.parse(e.data) as ServerMessage;
+      let msg: ServerMessage;
+      try {
+        msg = JSON.parse(e.data) as ServerMessage;
+      } catch {
+        return;
+      }
       if (msg.type === "snapshot" && !this.joinedOnce) {
         this.joinedOnce = true;
         this.onSnapshot(msg.content, msg.title);
       }
     });
+    ws.addEventListener("error", () => {});
     ws.addEventListener("close", () => {
       this.ws = null;
-      setTimeout(() => this.connect(), 1000);
+      setTimeout(() => this.connect(), this.retryDelay);
+      this.retryDelay = Math.min(this.retryDelay * 2, 30000);
     });
   }
 
@@ -47,7 +57,12 @@ export class WsClient {
 
   private send(m: ClientMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) this.transmit(m);
-    else this.buffer.push(m);
+    else {
+      if (m.type === "save") {
+        this.buffer = this.buffer.filter((b) => b.type !== "save");
+      }
+      this.buffer.push(m);
+    }
   }
 
   private transmit(m: ClientMessage): void {

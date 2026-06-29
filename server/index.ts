@@ -1,14 +1,16 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { join, extname, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { DocumentStore } from "./DocumentStore";
 import { DocumentSession } from "./DocumentSession";
 import type { ClientMessage, ServerMessage } from "../src/shared/types";
+import { safeStaticPath } from "./staticPath";
 
 const PORT = Number(process.env.WS_PORT ?? 5274);
 const DB_PATH = process.env.WWS_DB ?? "data/webwordstar.sqlite3";
 const DIST = "dist";
+const DIST_ABS = resolve(DIST);
 
 const store = new DocumentStore(DB_PATH);
 
@@ -20,15 +22,20 @@ const MIME: Record<string, string> = {
 
 // Serve the built frontend in production; in dev, Vite serves the app and proxies /ws here.
 const httpServer = createServer(async (req, res) => {
-  const url = (req.url ?? "/").split("?")[0]!;
-  const file = url === "/" ? "index.html" : url.slice(1);
+  const urlPath = (req.url ?? "/").split("?")[0]!;
+  const filePath = safeStaticPath(DIST_ABS, urlPath);
+  if (filePath === null) {
+    res.writeHead(400);
+    res.end("bad request");
+    return;
+  }
   try {
-    const body = await readFile(join(DIST, file));
-    res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
+    const body = await readFile(filePath);
+    res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream" });
     res.end(body);
   } catch {
     try {
-      const body = await readFile(join(DIST, "index.html"));
+      const body = await readFile(join(DIST_ABS, "index.html"));
       res.writeHead(200, { "content-type": "text/html" });
       res.end(body);
     } catch {
