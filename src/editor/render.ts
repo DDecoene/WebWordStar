@@ -71,7 +71,9 @@ function renderLine(
 export function renderEditor(state: EditorState): string {
   const { document, cursor, mode, filename } = state;
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
-  const status = `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`;
+  const status = state.prompt
+    ? `${state.prompt.label} ${state.prompt.buffer}`
+    : `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`;
   const block = state.hideBlock ? null : orderedBlock(state);
 
   const screen = document.lines
