@@ -5,8 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "concurrently -k -n vite,ws \"vite\" \"tsx watch server/index.ts\"",
+    "server": "tsx server/index.ts",
+    "serve": "vite build && tsx server/index.ts",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
@@ -14,9 +15,17 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.19.43",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "ws": "^8.21.0"
   }
 }
