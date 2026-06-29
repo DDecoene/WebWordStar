@@ -53,8 +53,10 @@ The document model (`src/shared/document.ts`) and `applyIntent` are **reused unc
 2. The client opens a WebSocket and sends `join(docId)`.
 3. The server's `DocumentSession` loads the document from SQLite, or creates an empty one (title `"UNTITLED"`) if the id is new, then replies with `snapshot(content, title)`.
 4. The client adopts the snapshot into `EditorState` and renders it (status line shows the title).
-5. On every **document-mutating** keystroke, the client sends the resulting `EditIntent` to the server. (Pure cursor moves are NOT sent — they don't change the document.)
-6. The server applies the intent to its canonical document via `applyIntent`, and schedules a **debounced write** (~500 ms after edits settle) of the latest `content` to SQLite. It also flushes on disconnect.
+5. On any keystroke that **changes the document**, the client schedules a **debounced save** (~500 ms after edits settle) and sends the full document `content` to the server. (Pure cursor moves don't change the document — detected by the `document` field keeping the same reference — so they don't trigger a save.)
+6. The server **stores** the received `content` to SQLite for that `docId`. It does not re-derive the document from operations in this stage.
+
+> **Protocol note (plan-time refinement):** Stage 4 sends the **full document content**, not granular `EditIntent`s. The current `EditIntent` union does not cover block copy (multi-line insert), so streaming intents would not persist block ops; and for single-user, latest-only persistence, full-content save is simpler and captures every mutation. The complete operation protocol (needed for conflict-free multi-user editing) is designed in **Stage 5 (collaboration)**, where the server becomes authoritative over operations. This stage's server only stores content.
 7. `^KN` → the client collects a title via the inline prompt and sends `setTitle(title)`; the server updates the row's `title` and `updated_at`.
 
 > **Single-user this stage.** The server is already authoritative (it owns the canonical doc), but there is no broadcast — exactly one editing session per document is assumed. Stage 5 adds fan-out to peers.
@@ -72,13 +74,13 @@ Extends `src/shared/types.ts`. All messages are JSON with a `type` discriminant.
 
 Client → server:
 - `{ type: "join"; docId: string }`
-- `{ type: "edit"; docId: string; intent: EditIntent }`
+- `{ type: "save"; docId: string; content: string }`
 - `{ type: "setTitle"; docId: string; title: string }`
 
 Server → client:
 - `{ type: "snapshot"; docId: string; content: string; title: string }`
 
-`content` is the document serialized via the model's `getText` (newline-joined). `EditIntent` is the existing union (`insertText` / `deleteRange` / `splitLine`).
+`content` is the document serialized via the model's `getText` (newline-joined).
 
 ---
 
@@ -100,12 +102,11 @@ Each has one responsibility, a defined interface, and is independently testable.
 - *Depends on:* better-sqlite3. Unit-testable against a temp DB file.
 
 ### 5.2 `DocumentSession` (server) — `server/DocumentSession.ts`
-- One per WebSocket connection, bound to a `docId`. Holds the canonical `TextDocument`.
-- `join()` loads/creates via the store and returns the snapshot payload.
-- `applyEdit(intent)` runs `applyIntent`, updates the canonical doc, and schedules the debounced persist.
+- One per WebSocket connection, bound to a `docId`.
+- `join()` loads the document via the store, creating an empty one if the id is new, and returns the snapshot payload `{content, title}`.
+- `save(content)` stores the content for the docId.
 - `setTitle(title)` persists the title.
-- `flush()` forces any pending write (called on disconnect).
-- *Depends on:* `DocumentStore`, `src/shared/document.ts`. Debounce is injectable (a timer function) so tests can run it synchronously.
+- *Depends on:* `DocumentStore`. (No `applyIntent` in this stage — the server only stores content; the canonical-operation model arrives in Stage 5.) Debounce lives on the client, so the server writes each `save` immediately.
 
 ### 5.3 WebSocket endpoint (server) — `server/index.ts`
 - Node HTTP server that serves the built frontend (production) and upgrades WebSocket connections; routes messages to a `DocumentSession`. Parses/validates incoming messages against the protocol; rejects malformed input.
