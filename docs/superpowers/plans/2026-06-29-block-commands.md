@@ -622,6 +622,92 @@ git commit -m "test: e2e coverage for block copy and delete"
 
 ---
 
+## Task 6: Arrow-key movement alternates
+
+WordStar bound the diamond to Ctrl+letters, which works on any layout but is spatially awkward on non-QWERTY keyboards (e.g. AZERTY relocates `^A`/`^Q`). Per the project decision, we keep faithful letter-binding AND add arrow keys as modern movement alternates. Arrow keys map to the same character moves as the diamond (`^S`/`^D`/`^E`/`^X`).
+
+**Files:**
+- Modify: `src/editor/state.ts`
+- Modify: `src/main.ts`
+- Test: `tests/editor-state.test.ts`
+
+- [ ] **Step 1: Add the failing test** (append to `tests/editor-state.test.ts`)
+
+```ts
+describe("arrow-key movement alternates", () => {
+  it("ArrowRight / ArrowLeft move like ^D / ^S", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 1 });
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("ArrowDown / ArrowUp move like ^X / ^E", () => {
+    let s = createEditorState("ab\ncd");
+    s = applyKey(s, { key: "ArrowDown", ctrl: false });
+    expect(s.cursor).toEqual({ line: 1, col: 0 });
+    s = applyKey(s, { key: "ArrowUp", ctrl: false });
+    expect(s.cursor).toEqual({ line: 0, col: 0 });
+  });
+  it("arrow keys do not insert text", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "ArrowRight", ctrl: false });
+    expect(s.document.lines).toEqual([""]);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run tests/editor-state.test.ts`
+Expected: FAIL — arrow keys fall through to no-op / get inserted is prevented but cursor doesn't move.
+
+- [ ] **Step 3: Handle arrow keys in `applyKey`** in `src/editor/state.ts`
+
+Add this branch in `applyKey` immediately BEFORE the `isPrintable(ev)` check (after the ctrl diamond/word block):
+```ts
+  // Arrow keys are modern alternates for the diamond's character moves.
+  const ARROWS: Record<string, string> = {
+    ArrowUp: "e",
+    ArrowDown: "x",
+    ArrowLeft: "s",
+    ArrowRight: "d",
+  };
+  if (!ev.ctrl && ev.key in ARROWS) {
+    const moved = moveDiamond(state, ARROWS[ev.key]!);
+    if (moved) return moved;
+  }
+```
+
+- [ ] **Step 4: Allow arrow keys through in `src/main.ts`**
+
+Extend the `NAMED` set so the handler intercepts arrows (otherwise the browser scrolls the page):
+```ts
+  const NAMED = new Set(["Enter", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+```
+
+- [ ] **Step 5: Run the unit tests and full verification**
+
+Run: `npx vitest run tests/editor-state.test.ts`
+Expected: PASS (prior tests plus 3 new).
+
+Run:
+```bash
+npm test
+npx tsc --noEmit
+npm run build
+```
+Expected: all green.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/editor/state.ts src/main.ts tests/editor-state.test.ts
+git commit -m "feat: arrow-key movement alternates for the diamond"
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage (Stage 2b portion):** `^K` block command family (spec §4.2; retrospective §7) — mark begin/end (`^KB`/`^KK`), copy (`^KC`), delete (`^KY`), hide/show (`^KH`), with on-screen highlight (spec §4.3) ✓. Reducer stays pure; multi-line text handled by new model helpers `getRange`/`insertMultiline` ✓. Playwright covers the real experience ✓. Explicitly deferred and NOT present: `^KV` move, column blocks, file read/write blocks, `^O`/`^P`, menus, help levels, ruler/flag column, word-wrap/`^B`, undo/redo.
