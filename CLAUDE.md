@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, and always-saved persistence (WebSocket + SQLite). Remaining for v1.0.0: layout dot commands, print/export, real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), and the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move. Remaining for v1.0.0: layout dot commands, print/export, real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -58,11 +58,14 @@ src/
   shared/
     types.ts           Shared types: Position, TextDocument, EditIntent, WS ClientMessage/ServerMessage
     document.ts        Pure document model (createDocument/getText/insertText/deleteRange/
-                       splitLine/applyIntent/getRange/insertMultiline)
+                       splitLine/applyIntent/getRange/insertMultiline, hard/soft return flags)
+    wrap.ts            Word-wrap and ^B paragraph reflow/justification helpers
   editor/
-    state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V,
-                       editing, prompt mode)
-    render.ts          EditorState -> HTML (status line, screen, block cursor, block highlight, prompt)
+    state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V, ^O, ^P,
+                       ^J, editing, prompt mode, undo/redo history)
+    render.ts          EditorState -> HTML (status line, ruler, flag column, screen, block cursor,
+                       block highlight, print-control styling, menus, prompt)
+    menus.ts           Self-revealing menu content + help-level gating for ^Q/^K/^O/^P/^J prefixes
   ws/
     WsClient.ts        Browser WebSocket client (join/save/setTitle, buffering + backoff reconnect)
   main.ts              Boot: URL/UUID, connect, adopt snapshot, debounced save, wire keydown
@@ -110,6 +113,37 @@ Bindings are `Ctrl`+letter (faithful to WordStar). Arrow keys are modern alterna
 |---|---|
 | `^V` | Toggle insert / overtype |
 | `Enter` / `Backspace` / `^G` | Split line / delete left / delete right |
+| `^B` | Reflow (word-wrap) current paragraph |
+| `^U` | Undo |
+| `^Q U` | Redo |
+| `^K V` | Move marked block to cursor |
+
+### `^O` onscreen format
+| Keys | Action |
+|---|---|
+| `^O L` / `^O R` | Set left / right margin (prompt) |
+| `^O C` | Center current line |
+| `^O S` | Set line spacing (prompt) |
+| `^O J` | Toggle justification |
+| `^O W` | Toggle word wrap |
+| `^O T` | Toggle ruler line |
+| `^O D` | Toggle print-control display |
+| `^O I` / `^O N` | Set / clear tab stop |
+| `^O X` | Release margins |
+| `^O G` | Temporary paragraph indent |
+
+### `^P` print controls
+| Keys | Style |
+|---|---|
+| `^P B` / `^P S` / `^P Y` | Bold / underline / italic |
+| `^P D` / `^P X` | Double-strike / strikeout |
+| `^P T` / `^P V` | Superscript / subscript |
+| `^P O` | Non-break space |
+
+### `^J` help
+| Keys | Action |
+|---|---|
+| `^J H` | Cycle help level (0–3, default 3) |
 
 ## Roadmap
 
@@ -119,7 +153,7 @@ Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 
 - [x] Editor core MVP — diamond, `^Q`, typing, insert/overtype, editing, terminal UI
 - [x] `^K` block commands + arrow-key alternates
 - [x] Persistence — always-saved over WebSocket + SQLite, UUID URLs, `^KN` title
-- [ ] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
+- [x] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
 - [ ] Layout dot commands (#6)
 - [ ] Real-time collaboration (#8) — server-authoritative; introduces the operation protocol
 - [ ] Print/export (#9) — PDF / HTML / plain text / Markdown

@@ -37,6 +37,19 @@ body {
   user-select: none;
 }
 
+/* Ruler row — column guide (L/R margins, ! tab stops), shown above the screen. */
+.ruler {
+  padding: 0 10px;
+  color: #6a737d;
+  white-space: pre;
+  user-select: none;
+}
+
+/* Flag column — trailing per-line marker, "<" for a hard return, blank for soft/wrapped. */
+.flag {
+  color: #6a737d;
+}
+
 /* The editing screen fills the rest of the viewport. */
 .screen {
   margin: 0;
@@ -67,4 +80,65 @@ body {
 .block {
   background: #264f78;
   color: #ffffff;
+}
+
+/* Embedded print-control marker (^P), shown as inverse video, e.g. "B" for bold. */
+.ctrl {
+  background: #0b0b0b;
+  color: #c8c8c8;
+}
+
+/* Print-control (^P) styled text between markers. */
+.fmt-bold {
+  font-weight: bold;
+}
+
+.fmt-underline {
+  text-decoration: underline;
+}
+
+.fmt-italic {
+  font-style: italic;
+}
+
+.fmt-double {
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+.fmt-strike {
+  text-decoration: line-through;
+}
+
+.fmt-super {
+  vertical-align: super;
+  font-size: 0.8em;
+}
+
+.fmt-sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}
+
+/* Self-revealing menu panel — shown after a ^Q/^K/^O/^P/^J prefix is held briefly. */
+.menu {
+  background: #161b22;
+  color: #c8c8c8;
+  border: 1px solid #1f6feb;
+  padding: 6px 10px;
+  white-space: pre;
+  user-select: none;
+}
+
+.menu-title {
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.menu-key {
+  color: #ffffff;
+  background: #1f6feb;
+  padding: 0 3px;
 }

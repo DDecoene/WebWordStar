@@ -45,7 +45,7 @@ describe("renderEditor", () => {
 
 describe("prompt rendering", () => {
   it("shows the prompt label and buffer in the status area when a prompt is active", () => {
-    const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc" } };
+    const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc", target: "filename" as const } };
     const html = renderEditor(s);
     expect(html).toContain("DOCUMENT NAME:");
     expect(html).toContain("My Doc");
@@ -59,7 +59,7 @@ describe("prompt rendering", () => {
   });
 
   it("suppresses the document cursor while a prompt is active (no double caret)", () => {
-    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "" } };
+    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "", target: "filename" as const } };
     const html = renderEditor(s);
     // The only caret is the prompt's, in the status bar — the screen has none.
     const screen = html.split('data-testid="screen">')[1]!;
@@ -88,5 +88,109 @@ describe("block highlight rendering", () => {
       hideBlock: true,
     };
     expect(renderEditor(s)).not.toContain('class="block"');
+  });
+});
+
+describe("print control rendering", () => {
+  function screenOf(html: string): string {
+    return html.split('data-testid="screen">')[1]!;
+  }
+
+  it("shown mode renders marker cells with class ctrl and styles the enclosed text", () => {
+    const s = { ...createEditorState("a\x02bold\x02b"), cursor: { line: 0, col: 20 } };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain('<span class="ctrl">B</span>');
+    expect(html).toContain('<span class="fmt-bold">bold</span>');
+  });
+
+  it("hidden mode omits marker cells but still applies the style", () => {
+    const s = {
+      ...createEditorState("a\x02bold\x02b"),
+      cursor: { line: 0, col: 20 },
+      showControls: false,
+    };
+    const html = screenOf(renderEditor(s));
+    expect(html).not.toContain("ctrl");
+    expect(html).toContain('<span class="fmt-bold">bold</span>');
+  });
+
+  it("hidden mode: cursor on a marker char highlights the next visible character", () => {
+    // "a\x02bold" — cursor sits on the marker (col 1); with markers hidden, the
+    // highlighted cell should be the first visible char after it ("b" of "bold").
+    const s = {
+      ...createEditorState("a\x02bold"),
+      cursor: { line: 0, col: 1 },
+      showControls: false,
+    };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain('<span class="fmt-bold cursor">b</span>');
+  });
+
+  it("renders the non-break-space control char as a plain space", () => {
+    const s = { ...createEditorState("a\x0Fb"), cursor: { line: 0, col: 20 } };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain("a b");
+  });
+});
+
+describe("ruler and flag column", () => {
+  it("renders a ruler row with L at left, R at right, and ! at tab stops", () => {
+    const s = createEditorState("hello");
+    const html = renderEditor(s);
+    expect(html).toContain('data-testid="ruler"');
+    const ruler = html.split('data-testid="ruler">')[1]!.split("</div>")[0]!;
+    expect(ruler[s.ruler.left]).toBe("L");
+    expect(ruler[s.ruler.right]).toBe("R");
+    for (const tab of s.ruler.tabs) {
+      expect(ruler[tab]).toBe("!");
+    }
+  });
+
+  it("does not render a ruler row when showRuler is false", () => {
+    const s = { ...createEditorState("hello"), ruler: { ...createEditorState("hello").ruler, showRuler: false } };
+    const html = renderEditor(s);
+    expect(html).not.toContain('data-testid="ruler"');
+  });
+
+  it("ends a hard-return line with a < flag", () => {
+    const s = { ...createEditorState("alpha\nbeta"), cursor: { line: 1, col: 4 } };
+    const html = renderEditor(s);
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).toContain('alpha<span class="flag">&lt;</span>');
+  });
+
+  it("ends a soft-return line with a blank flag", () => {
+    const s = { ...createEditorState("alpha\nbeta"), cursor: { line: 1, col: 4 } };
+    s.document.returns[0] = "soft";
+    const html = renderEditor(s);
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).toContain('alpha<span class="flag"> </span>');
+  });
+});
+
+describe("self-revealing menus", () => {
+  it("shows the block menu when pending is 'block', revealMenu is true, and helpLevel is high enough", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 3 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).toContain('data-testid="menu"');
+    expect(html).toContain("copy block");
+  });
+
+  it("hides the menu when helpLevel is too low", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 1 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).not.toContain('data-testid="menu"');
+  });
+
+  it("hides the menu when revealMenu is false", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 3 as const };
+    const html = renderEditor(s);
+    expect(html).not.toContain('data-testid="menu"');
+  });
+
+  it("hides the menu when nothing is pending", () => {
+    const s = { ...createEditorState(""), pending: null, helpLevel: 3 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).not.toContain('data-testid="menu"');
   });
 });

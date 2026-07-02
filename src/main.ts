@@ -18,15 +18,20 @@ if (app) {
 
   let state: EditorState = createEditorState("", "UNTITLED");
 
+  const MENU_REVEAL_MS = 800;
+  let menuTimer: ReturnType<typeof setTimeout> | null = null;
+  let revealMenu = false;
+
   const paint = () => {
-    app.innerHTML = renderEditor(state);
+    app.innerHTML = renderEditor(state, { revealMenu });
   };
 
   const wsUrl = `${window.location.origin.replace(/^http/, "ws")}/ws`;
   const client = new WsClient(wsUrl, docId!, (content, title) => {
     // Only adopt the snapshot when the user has not yet started editing
-    // (guards against a late-arriving snapshot wiping freshly typed content).
-    if (getText(state.document) === "") {
+    // (guards against a late-arriving snapshot wiping freshly typed content,
+    // or clobbering an in-progress prompt/prefix such as ^O R's margin prompt).
+    if (getText(state.document) === "" && state.prompt === null && state.pending === null) {
       state = createEditorState(content, title || "UNTITLED");
       paint();
     }
@@ -46,7 +51,7 @@ if (app) {
     client.save(getText(state.document));
   });
 
-  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f"]);
+  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f", "j", "o", "p", "u", "b"]);
   const NAMED = new Set([
     "Enter",
     "Backspace",
@@ -60,7 +65,12 @@ if (app) {
   window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
     const ctrl = e.ctrlKey && !e.altKey;
-    const isCtrlCommand = ctrl && CTRL_COMMANDS.has(e.key.toLowerCase());
+    // With a prefix pending, any ctrl+letter is a valid second key (classic WordStar
+    // accepts e.g. ^K^C); otherwise only the base command set claims ctrl keys.
+    const isCtrlCommand =
+      ctrl &&
+      (CTRL_COMMANDS.has(e.key.toLowerCase()) ||
+        (state.pending !== null && e.key.length === 1 && /[a-z]/i.test(e.key)));
     const isNamed = !ctrl && NAMED.has(e.key);
     const isPrintable = !ctrl && !e.altKey && !e.metaKey && e.key.length === 1;
     if (!isCtrlCommand && !isNamed && !isPrintable) return;
@@ -71,6 +81,16 @@ if (app) {
 
     if (state.document !== prev.document) scheduleSave(); // content changed
     if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
+
+    if (menuTimer) { clearTimeout(menuTimer); menuTimer = null; }
+    revealMenu = false;
+    if (state.pending !== null) {
+      menuTimer = setTimeout(() => {
+        revealMenu = true;
+        paint();
+      }, MENU_REVEAL_MS);
+    }
+
     paint();
   });
 

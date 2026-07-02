@@ -17,9 +17,12 @@ forward, running natively in the browser.
 ## Status
 
 **Early but usable.** Working toward the v1.0.0 milestone. Shipped so far: the editor
-core, `^K` block commands, arrow-key alternates, and always-saved persistence. Still to
-come in v1.0.0: layout dot commands, print/export, and real-time collaboration. See the
-roadmap in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
+core (diamond, `^Q`, `^K` block commands, arrow-key alternates, editing), the editor
+core remainder — word wrap and `^B` reflow, a ruler line and flag column, the full
+`^O` onscreen-format menu, `^P` print controls with styled rendering, self-revealing
+menus, help levels, and multi-level undo/redo — plus always-saved persistence. Still
+to come in v1.0.0: layout dot commands, print/export, and real-time collaboration.
+See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Running it
 
@@ -78,6 +81,44 @@ provided as a modern alternative for cursor movement.
 | `^V` | Toggle insert / overtype |
 | `Enter` | Split the line |
 | `Backspace` / `^G` | Delete left / right (joins lines at edges) |
+| `^B` | Reflow (word-wrap) the current paragraph |
+| `^U` | Undo |
+| `^Q U` | Redo |
+| `^K V` | Move the marked block to the cursor |
+
+### `^O` onscreen format
+
+| Keys | Action |
+|---|---|
+| `^O L` / `^O R` | Set left / right margin (prompt) |
+| `^O C` | Center the current line |
+| `^O S` | Set line spacing (prompt) |
+| `^O J` | Toggle justification |
+| `^O W` | Toggle word wrap |
+| `^O T` | Toggle the ruler line |
+| `^O D` | Toggle print-control display |
+| `^O I` / `^O N` | Set / clear a tab stop |
+| `^O X` | Release margins |
+| `^O G` | Temporary paragraph indent |
+
+### `^P` print controls
+
+| Keys | Style |
+|---|---|
+| `^P B` | Bold |
+| `^P S` | Underline |
+| `^P Y` | Italic |
+| `^P D` | Double-strike |
+| `^P X` | Strikeout |
+| `^P T` | Superscript |
+| `^P V` | Subscript |
+| `^P O` | Non-break space |
+
+### `^J` help
+
+| Keys | Action |
+|---|---|
+| `^J H` | Cycle help level (0–3, default 3) |
 
 ## Architecture
 

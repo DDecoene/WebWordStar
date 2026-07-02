@@ -2,7 +2,8 @@ import type { TextDocument, Position, EditIntent } from "./types";
 
 /** Create a document. Empty text yields a single empty line. */
 export function createDocument(text = ""): TextDocument {
-  return { lines: text.split("\n") };
+  const lines = text.split("\n");
+  return { lines, returns: lines.map(() => "hard" as const) };
 }
 
 /** Serialize the document back to a single string with newline separators. */
@@ -28,7 +29,9 @@ export function deleteRange(doc: TextDocument, start: Position, end: Position): 
   const head = lines[start.line].slice(0, start.col);
   const tail = lines[end.line].slice(end.col);
   lines.splice(start.line, end.line - start.line + 1, head + tail);
-  return { lines };
+  const returns = doc.returns.slice();
+  returns.splice(start.line, end.line - start.line + 1, doc.returns[end.line]!);
+  return { lines, returns };
 }
 
 /**
@@ -48,7 +51,7 @@ export function insertText(doc: TextDocument, at: Position, text: string): TextD
   const lines = doc.lines.slice();
   const line = lines[at.line];
   lines[at.line] = line.slice(0, at.col) + text + line.slice(at.col);
-  return { lines };
+  return { lines, returns: doc.returns.slice() };
 }
 
 /**
@@ -56,14 +59,20 @@ export function insertText(doc: TextDocument, at: Position, text: string): TextD
  *
  * @throws {RangeError} if `at.line` is out of range.
  */
-export function splitLine(doc: TextDocument, at: Position): TextDocument {
+export function splitLine(
+  doc: TextDocument,
+  at: Position,
+  kind: "hard" | "soft" = "hard",
+): TextDocument {
   if (at.line < 0 || at.line >= doc.lines.length) {
     throw new RangeError("splitLine: line index out of range");
   }
   const lines = doc.lines.slice();
   const line = lines[at.line];
   lines.splice(at.line, 1, line.slice(0, at.col), line.slice(at.col));
-  return { lines };
+  const returns = doc.returns.slice();
+  returns.splice(at.line, 1, kind, doc.returns[at.line]!);
+  return { lines, returns };
 }
 
 /** Return the text between start (inclusive) and end (exclusive), in document order, joined by "\n". */
@@ -97,7 +106,10 @@ export function insertMultiline(
 
   if (parts.length === 1) {
     lines[at.line] = head + parts[0] + tail;
-    return { document: { lines }, end: { line: at.line, col: at.col + parts[0]!.length } };
+    return {
+      document: { lines, returns: doc.returns.slice() },
+      end: { line: at.line, col: at.col + parts[0]!.length },
+    };
   }
 
   const firstLine = head + parts[0];
@@ -105,8 +117,14 @@ export function insertMultiline(
   const lastLine = lastPart + tail;
   const middle = parts.slice(1, -1);
   lines.splice(at.line, 1, firstLine, ...middle, lastLine);
+
+  const returns = doc.returns.slice();
+  const newReturns: ("hard" | "soft")[] = parts.slice(0, -1).map(() => "hard" as const);
+  newReturns.push(doc.returns[at.line]!);
+  returns.splice(at.line, 1, ...newReturns);
+
   return {
-    document: { lines },
+    document: { lines, returns },
     end: { line: at.line + parts.length - 1, col: lastPart.length },
   };
 }

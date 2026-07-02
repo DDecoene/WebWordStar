@@ -11,6 +11,8 @@ export interface Position {
  */
 export interface TextDocument {
   lines: string[];
+  /** returns[i] describes the break after lines[i]; the last entry is always "hard". */
+  returns: ("hard" | "soft")[];
 }
 
 /** Edit intents: what a client asks the server to do. Pure data. */

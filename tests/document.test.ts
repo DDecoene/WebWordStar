@@ -142,3 +142,36 @@ describe("insertMultiline", () => {
     expect(r.end).toEqual({ line: 2, col: 1 });
   });
 });
+
+describe("hard/soft return flags", () => {
+  it("createDocument marks all breaks hard", () => {
+    const doc = createDocument("a\nb\nc");
+    expect(doc.returns).toEqual(["hard", "hard", "hard"]);
+  });
+
+  it("splitLine defaults to a hard return, or records soft when asked", () => {
+    const doc = createDocument("hello");
+    expect(splitLine(doc, { line: 0, col: 2 }).returns).toEqual(["hard", "hard"]);
+    expect(splitLine(doc, { line: 0, col: 2 }, "soft").returns).toEqual(["soft", "hard"]);
+  });
+
+  it("deleteRange across lines drops the removed breaks", () => {
+    let doc = createDocument("aaa");
+    doc = splitLine(doc, { line: 0, col: 1 }, "soft"); // a|aa -> ["a","aa"] soft
+    doc = splitLine(doc, { line: 1, col: 1 }); // ["a","a","a"] soft,hard
+    const next = deleteRange(doc, { line: 0, col: 1 }, { line: 1, col: 0 });
+    expect(next.lines).toEqual(["aa", "a"]);
+    expect(next.returns).toEqual(["hard", "hard"]);
+  });
+
+  it("insertMultiline inserts hard breaks", () => {
+    const doc = createDocument("aZ");
+    const r = insertMultiline(doc, { line: 0, col: 1 }, "b\ncc\nd");
+    expect(r.document.returns).toEqual(["hard", "hard", "hard"]);
+  });
+
+  it("last return is always hard", () => {
+    const doc = createDocument("only");
+    expect(doc.returns).toEqual(["hard"]);
+  });
+});

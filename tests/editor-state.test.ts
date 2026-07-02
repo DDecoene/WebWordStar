@@ -290,6 +290,92 @@ describe("^KC copy / ^KY delete", () => {
   });
 });
 
+describe("block move ^KV", () => {
+  function markBlock(s: ReturnType<typeof createEditorState>, start: { line: number; col: number }, end: { line: number; col: number }) {
+    s = { ...s, cursor: start };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = { ...s, cursor: end };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    return s;
+  }
+
+  it("moves a block forward (block before cursor)", () => {
+    // "abcdef", block [0,1)-[0,3) ("bc"), cursor at col 6.
+    // Delete "bc" -> "adef"; cursor col 6 maps to col 4; insert "bc" at 4 -> "adefbc".
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 3 });
+    s = { ...s, cursor: { line: 0, col: 6 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["adefbc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 6 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("moves a block backward (cursor before block)", () => {
+    // "abcdef", block [0,3)-[0,5) ("de"), cursor at col 0.
+    // Insert "de" at col 0 -> "deabcdef" minus removed range... compute: delete "de" -> "abcf";
+    // insert "de" at col 0 -> "deabcf"; cursor ends at col 2.
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 3 }, { line: 0, col: 5 });
+    s = { ...s, cursor: { line: 0, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["deabcf"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("moves a multi-line block across lines", () => {
+    let s = createEditorState("ab\ncd\nef\n");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 1, col: 2 }); // "ab\ncd"
+    s = { ...s, cursor: { line: 3, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    // deleteRange("ab\ncd") from lines ["ab","cd","ef",""] leaves ["","ef",""].
+    // cursor was on line 3, col 0 (after end.line=1): shifts up by (1-0)=1 -> line 2.
+    // insert "ab\ncd" at {line:2, col:0} -> ["","ef","ab","cd"].
+    expect(s.document.lines).toEqual(["", "ef", "ab", "cd"]);
+    expect(s.cursor).toEqual({ line: 3, col: 2 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("is a no-op when the cursor is inside the block", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = { ...s, cursor: { line: 0, col: 2 } }; // inside block
+    const before = s.document;
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document).toBe(before);
+    expect(s.blockStart).toEqual({ line: 0, col: 1 });
+    expect(s.blockEnd).toEqual({ line: 0, col: 4 });
+  });
+
+  it("is a no-op when markers are unset", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+
+  it("undo restores the pre-move document", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 3 });
+    s = { ...s, cursor: { line: 0, col: 6 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["adefbc"]);
+    s = applyKey(s, { key: "u", ctrl: true });
+    expect(s.document.lines).toEqual(["abcdef"]);
+  });
+});
+
 describe("arrow-key movement alternates", () => {
   it("ArrowRight / ArrowLeft move like ^D / ^S", () => {
     let s = createEditorState("abc");
@@ -347,5 +433,412 @@ describe("^Q quick movement prefix", () => {
     expect(s.pending).toBeNull();
     expect(s.cursor).toEqual({ line: 0, col: 0 });
     expect(s.document.lines).toEqual(["abc"]);
+  });
+});
+
+describe("undo/redo", () => {
+  function undo(s: ReturnType<typeof createEditorState>) {
+    return applyKey(s, { key: "u", ctrl: true });
+  }
+  function redo(s: ReturnType<typeof createEditorState>) {
+    s = applyKey(s, { key: "q", ctrl: true });
+    return applyKey(s, { key: "u", ctrl: false });
+  }
+
+  it("typing 3 chars then ^U restores the original doc and cursor in one step", () => {
+    let s = createEditorState("");
+    const original = { document: s.document, cursor: s.cursor };
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(original.document.lines);
+    expect(s.cursor).toEqual(original.cursor);
+  });
+
+  it("backspaces coalesce as their own run, separate from typing", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    // seal the typing chunk with a movement
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    const beforeBackspaces = { document: s.document, cursor: s.cursor };
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    s = { ...s, cursor: { line: 0, col: 0 } }; // reposition without going through applyKey
+    expect(s.document.lines).toEqual(["b"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(beforeBackspaces.document.lines);
+    expect(s.cursor).toEqual(beforeBackspaces.cursor);
+  });
+
+  it("movement seals a chunk: type 'a', move left, type 'b' -> two undo steps", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["ba"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(["a"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual([""]);
+  });
+
+  it("^Q U redoes what ^U undid", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = applyKey(s, { key: "c", ctrl: false });
+    s = undo(s);
+    expect(s.document.lines).toEqual([""]);
+    s = redo(s);
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+
+  it("a new edit after ^U clears the redo stack", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = undo(s);
+    expect(s.history.redo.length).toBe(1);
+    s = applyKey(s, { key: "z", ctrl: false });
+    expect(s.history.redo.length).toBe(0);
+  });
+
+  it("caps the undo stack at 200 snapshots", () => {
+    let s = createEditorState("");
+    for (let i = 0; i < 250; i++) {
+      s = applyKey(s, { key: "a", ctrl: false });
+      s = applyKey(s, { key: "ArrowLeft", ctrl: false }); // seal chunk each time
+    }
+    expect(s.history.undo.length).toBe(200);
+  });
+
+  it("^U on an empty undo stack is a no-op", () => {
+    let s = createEditorState("abc");
+    s = undo(s);
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+});
+
+describe("^O onscreen format", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+  function type(s: ReturnType<typeof createEditorState>, text: string) {
+    for (const ch of text) s = applyKey(s, { key: ch, ctrl: false });
+    return s;
+  }
+
+  it("has sensible ruler defaults", () => {
+    const s = createEditorState("");
+    expect(s.ruler.left).toBe(0);
+    expect(s.ruler.right).toBe(65);
+    expect(s.ruler.tabs).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]);
+    expect(s.ruler.spacing).toBe(1);
+    expect(s.ruler.justify).toBe(false);
+    expect(s.ruler.wordWrap).toBe(true);
+    expect(s.ruler.showRuler).toBe(true);
+    expect(s.showControls).toBe(true);
+    expect(s.marginRelease).toBe(false);
+    expect(s.tempIndent).toBeNull();
+  });
+
+  it("^O L prompts and commits left margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    expect(s.prompt?.label).toBe("LEFT MARGIN:");
+    s = type(s, "5");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(4);
+  });
+
+  it("^O R prompts and commits right margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "r", ctrl: false });
+    s = type(s, "70");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.right).toBe(69);
+  });
+
+  it("rejects left margin >= right margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    s = type(s, "70"); // 0-based 69, right is 65 by default -> reject
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(0);
+  });
+
+  it("rejects non-numeric margin input", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    s = type(s, "abc");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(0);
+  });
+
+  it("^O J / ^O W / ^O T / ^O D toggle", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "j", ctrl: false });
+    expect(s.ruler.justify).toBe(true);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "w", ctrl: false });
+    expect(s.ruler.wordWrap).toBe(false);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "t", ctrl: false });
+    expect(s.ruler.showRuler).toBe(false);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "d", ctrl: false });
+    expect(s.showControls).toBe(false);
+  });
+
+  it("^O C centers the current line and is undoable", () => {
+    let s = createEditorState("hi");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "r", ctrl: false });
+    s = type(s, "10");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.right).toBe(9);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines[0]).toBe("    hi");
+
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines[0]).toBe("hi");
+  });
+
+  it("^O I / ^O N add and remove a tab stop at the cursor column", () => {
+    let s = createEditorState("abcdefgh");
+    s = { ...s, cursor: { line: 0, col: 3 } };
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "i", ctrl: false });
+    expect(s.ruler.tabs).toContain(3);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "n", ctrl: false });
+    expect(s.ruler.tabs).not.toContain(3);
+  });
+
+  it("^O S prompts spacing; valid commits, invalid rejects", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "s", ctrl: false });
+    s = type(s, "2");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.spacing).toBe(2);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "s", ctrl: false });
+    s = type(s, "0");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.spacing).toBe(2); // rejected, unchanged
+  });
+
+  it("^O X sets margin release", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    expect(s.marginRelease).toBe(true);
+  });
+
+  it("^O G sets temp indent to the next tab stop", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "g", ctrl: false });
+    expect(s.tempIndent).toBe(5);
+  });
+
+  it("Enter clears tempIndent and marginRelease", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "g", ctrl: false });
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    expect(s.tempIndent).toBe(5);
+    expect(s.marginRelease).toBe(true);
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.tempIndent).toBeNull();
+    expect(s.marginRelease).toBe(false);
+  });
+
+  it("^KN still works alongside the new prompt target machinery", () => {
+    let s = createEditorState("", "UNTITLED");
+    s = applyKey(s, ctrl("k"));
+    s = applyKey(s, { key: "n", ctrl: false });
+    s = type(s, "MYDOC");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.filename).toBe("MYDOC");
+  });
+});
+
+describe("word wrap", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+  function type(s: ReturnType<typeof createEditorState>, text: string) {
+    for (const ch of text) s = applyKey(s, { key: ch, ctrl: false });
+    return s;
+  }
+  function narrowRuler(s: ReturnType<typeof createEditorState>, right: number) {
+    return { ...s, ruler: { ...s.ruler, right } };
+  }
+
+  it("typing past the right margin moves the current word to a new soft-return line", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6); // maxWidth = 7
+    s = type(s, "aaa bbb");
+    // "aaa bbb" is width 7, fits exactly. Typing one more char overflows.
+    s = type(s, "c");
+    expect(s.document.lines[0]).toBe("aaa");
+    expect(s.document.lines[1]).toBe("bbbc");
+    expect(s.document.returns[0]).toBe("soft");
+    expect(s.cursor).toEqual({ line: 1, col: 4 });
+  });
+
+  it("^O X (margin release) suppresses wrap for the current line", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6);
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    s = type(s, "aaa bbbc");
+    expect(s.document.lines).toEqual(["aaa bbbc"]);
+  });
+
+  it("^O W (word wrap off) disables wrapping", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6);
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "w", ctrl: false });
+    expect(s.ruler.wordWrap).toBe(false);
+    s = type(s, "aaa bbbc");
+    expect(s.document.lines).toEqual(["aaa bbbc"]);
+  });
+
+  it("^B reflows a manually-constructed ragged paragraph", () => {
+    let s = createEditorState("the quick\nbrown fox\njumps");
+    s = narrowRuler(s, 10);
+    s = { ...s, document: { ...s.document, returns: ["soft", "soft", "hard"] } };
+    s = applyKey(s, ctrl("b"));
+    expect(s.document.lines.join("|")).toBe("the quick|brown fox|jumps");
+  });
+
+  it("^B is undoable with ^U", () => {
+    let s = createEditorState("the\nquick\nbrown\nfox\njumps");
+    s = narrowRuler(s, 10);
+    s = { ...s, document: { ...s.document, returns: ["soft", "soft", "soft", "soft", "hard"] } };
+    const before = s.document.lines.slice();
+    s = applyKey(s, ctrl("b"));
+    expect(s.document.lines).not.toEqual(before);
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines).toEqual(before);
+  });
+});
+
+describe("^P print controls", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+
+  it("^P B inserts the bold control char at the cursor and advances the cursor", () => {
+    let s = createEditorState("ab");
+    s = { ...s, cursor: { line: 0, col: 1 } };
+    s = applyKey(s, ctrl("p"));
+    expect(s.pending).toBe("print");
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["a\x02b"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+    expect(s.pending).toBeNull();
+  });
+
+  it("maps every ^P sub-key to its control character", () => {
+    const mapping: Record<string, string> = {
+      b: "\x02",
+      s: "\x13",
+      y: "\x19",
+      d: "\x04",
+      x: "\x18",
+      t: "\x14",
+      v: "\x16",
+      o: "\x0F",
+    };
+    for (const [key, ch] of Object.entries(mapping)) {
+      let s = createEditorState("");
+      s = applyKey(s, ctrl("p"));
+      s = applyKey(s, { key, ctrl: false });
+      expect(s.document.lines).toEqual([ch]);
+    }
+  });
+
+  it("ignores an unknown ^P sub-key", () => {
+    let s = createEditorState("ab");
+    s = applyKey(s, ctrl("p"));
+    s = applyKey(s, { key: "z", ctrl: false });
+    expect(s.document.lines).toEqual(["ab"]);
+    expect(s.pending).toBeNull();
+  });
+
+  it("^P insertion is undoable with ^U", () => {
+    let s = createEditorState("ab");
+    s = { ...s, cursor: { line: 0, col: 1 } };
+    s = applyKey(s, ctrl("p"));
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["a\x02b"]);
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines).toEqual(["ab"]);
+  });
+});
+
+describe("help level", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+
+  it("defaults to help level 3", () => {
+    const s = createEditorState("");
+    expect(s.helpLevel).toBe(3);
+  });
+
+  it("^J H prompts for the help level and commits a valid value", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    expect(s.pending).toBe("help");
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.prompt).toEqual({ label: "HELP LEVEL (0-3):", buffer: "", target: "helpLevel" });
+    s = applyKey(s, { key: "1", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(1);
+    expect(s.prompt).toBeNull();
+  });
+
+  it("rejects an out-of-range help level and leaves helpLevel unchanged", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    s = applyKey(s, { key: "h", ctrl: false });
+    s = applyKey(s, { key: "5", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(3);
+    expect(s.prompt).toBeNull();
+  });
+
+  it("rejects a non-numeric help level and leaves helpLevel unchanged", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    s = applyKey(s, { key: "h", ctrl: false });
+    s = applyKey(s, { key: "x", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(3);
+    expect(s.prompt).toBeNull();
   });
 });
