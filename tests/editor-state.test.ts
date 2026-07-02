@@ -520,3 +520,165 @@ describe("undo/redo", () => {
     expect(s.document.lines).toEqual(["abc"]);
   });
 });
+
+describe("^O onscreen format", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+  function type(s: ReturnType<typeof createEditorState>, text: string) {
+    for (const ch of text) s = applyKey(s, { key: ch, ctrl: false });
+    return s;
+  }
+
+  it("has sensible ruler defaults", () => {
+    const s = createEditorState("");
+    expect(s.ruler.left).toBe(0);
+    expect(s.ruler.right).toBe(65);
+    expect(s.ruler.tabs).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]);
+    expect(s.ruler.spacing).toBe(1);
+    expect(s.ruler.justify).toBe(false);
+    expect(s.ruler.wordWrap).toBe(true);
+    expect(s.ruler.showRuler).toBe(true);
+    expect(s.showControls).toBe(true);
+    expect(s.marginRelease).toBe(false);
+    expect(s.tempIndent).toBeNull();
+  });
+
+  it("^O L prompts and commits left margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    expect(s.prompt?.label).toBe("LEFT MARGIN:");
+    s = type(s, "5");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(4);
+  });
+
+  it("^O R prompts and commits right margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "r", ctrl: false });
+    s = type(s, "70");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.right).toBe(69);
+  });
+
+  it("rejects left margin >= right margin", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    s = type(s, "70"); // 0-based 69, right is 65 by default -> reject
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(0);
+  });
+
+  it("rejects non-numeric margin input", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "l", ctrl: false });
+    s = type(s, "abc");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.prompt).toBeNull();
+    expect(s.ruler.left).toBe(0);
+  });
+
+  it("^O J / ^O W / ^O T / ^O D toggle", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "j", ctrl: false });
+    expect(s.ruler.justify).toBe(true);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "w", ctrl: false });
+    expect(s.ruler.wordWrap).toBe(false);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "t", ctrl: false });
+    expect(s.ruler.showRuler).toBe(false);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "d", ctrl: false });
+    expect(s.showControls).toBe(false);
+  });
+
+  it("^O C centers the current line and is undoable", () => {
+    let s = createEditorState("hi");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "r", ctrl: false });
+    s = type(s, "10");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.right).toBe(9);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines[0]).toBe("    hi");
+
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines[0]).toBe("hi");
+  });
+
+  it("^O I / ^O N add and remove a tab stop at the cursor column", () => {
+    let s = createEditorState("abcdefgh");
+    s = { ...s, cursor: { line: 0, col: 3 } };
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "i", ctrl: false });
+    expect(s.ruler.tabs).toContain(3);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "n", ctrl: false });
+    expect(s.ruler.tabs).not.toContain(3);
+  });
+
+  it("^O S prompts spacing; valid commits, invalid rejects", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "s", ctrl: false });
+    s = type(s, "2");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.spacing).toBe(2);
+
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "s", ctrl: false });
+    s = type(s, "0");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.ruler.spacing).toBe(2); // rejected, unchanged
+  });
+
+  it("^O X sets margin release", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    expect(s.marginRelease).toBe(true);
+  });
+
+  it("^O G sets temp indent to the next tab stop", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "g", ctrl: false });
+    expect(s.tempIndent).toBe(5);
+  });
+
+  it("Enter clears tempIndent and marginRelease", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "g", ctrl: false });
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    expect(s.tempIndent).toBe(5);
+    expect(s.marginRelease).toBe(true);
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.tempIndent).toBeNull();
+    expect(s.marginRelease).toBe(false);
+  });
+
+  it("^KN still works alongside the new prompt target machinery", () => {
+    let s = createEditorState("", "UNTITLED");
+    s = applyKey(s, ctrl("k"));
+    s = applyKey(s, { key: "n", ctrl: false });
+    s = type(s, "MYDOC");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.filename).toBe("MYDOC");
+  });
+});

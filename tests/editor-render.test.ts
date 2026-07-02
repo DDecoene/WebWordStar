@@ -45,7 +45,7 @@ describe("renderEditor", () => {
 
 describe("prompt rendering", () => {
   it("shows the prompt label and buffer in the status area when a prompt is active", () => {
-    const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc" } };
+    const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc", target: "filename" as const } };
     const html = renderEditor(s);
     expect(html).toContain("DOCUMENT NAME:");
     expect(html).toContain("My Doc");
@@ -59,7 +59,7 @@ describe("prompt rendering", () => {
   });
 
   it("suppresses the document cursor while a prompt is active (no double caret)", () => {
-    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "" } };
+    const s = { ...createEditorState("hello"), prompt: { label: "DOCUMENT NAME:", buffer: "", target: "filename" as const } };
     const html = renderEditor(s);
     // The only caret is the prompt's, in the status bar — the screen has none.
     const screen = html.split('data-testid="screen">')[1]!;

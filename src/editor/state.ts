@@ -2,12 +2,29 @@ import type { Position, TextDocument } from "../shared/types";
 import { createDocument, insertText, deleteRange, splitLine, getRange, insertMultiline } from "../shared/document";
 
 export type EditorMode = "insert" | "overtype";
-export type Pending = null | "quick" | "block"; // ^Q quick, ^K block
+export type Pending = null | "quick" | "block" | "onscreen"; // ^Q quick, ^K block, ^O onscreen format
 export type EditKind = "type" | "backspace";
+export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing";
 
 export interface HistorySnapshot {
   document: TextDocument;
   cursor: Position;
+}
+
+export interface Ruler {
+  left: number;
+  right: number;
+  tabs: number[];
+  spacing: number;
+  justify: boolean;
+  wordWrap: boolean;
+  showRuler: boolean;
+}
+
+export function createRuler(): Ruler {
+  const tabs: number[] = [];
+  for (let c = 5; c <= 60; c += 5) tabs.push(c);
+  return { left: 0, right: 65, tabs, spacing: 1, justify: false, wordWrap: true, showRuler: true };
 }
 
 export interface EditorState {
@@ -19,9 +36,13 @@ export interface EditorState {
   blockStart: Position | null;
   blockEnd: Position | null;
   hideBlock: boolean;
-  prompt: { label: string; buffer: string } | null;
+  prompt: { label: string; buffer: string; target: PromptTarget } | null;
   history: { undo: HistorySnapshot[]; redo: HistorySnapshot[] };
   lastEdit: EditKind | null;
+  ruler: Ruler;
+  showControls: boolean;
+  marginRelease: boolean;
+  tempIndent: number | null;
 }
 
 export interface KeyEvent {
@@ -44,6 +65,10 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     prompt: null,
     history: { undo: [], redo: [] },
     lastEdit: null,
+    ruler: createRuler(),
+    showControls: true,
+    marginRelease: false,
+    tempIndent: null,
   };
 }
 
@@ -118,6 +143,9 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   if (state.pending === "block") {
     return resolveBlock({ ...state, pending: null }, ev.key.toLowerCase());
   }
+  if (state.pending === "onscreen") {
+    return resolveOnscreen({ ...state, pending: null }, ev.key.toLowerCase());
+  }
 
   // ^Q — begin a quick-movement prefix
   if (ev.ctrl && ev.key.toLowerCase() === "q") {
@@ -127,6 +155,11 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   // ^K — begin a block command prefix
   if (ev.ctrl && ev.key.toLowerCase() === "k") {
     return { ...sealChunk(state), pending: "block" };
+  }
+
+  // ^O — begin an onscreen-format command prefix
+  if (ev.ctrl && ev.key.toLowerCase() === "o") {
+    return { ...sealChunk(state), pending: "onscreen" };
   }
 
   // ^V — toggle insert/overtype
@@ -142,7 +175,13 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   if (!ev.ctrl && ev.key === "Enter") {
     const withHistory = remember(state, null);
     const doc = splitLine(withHistory.document, withHistory.cursor);
-    return { ...withHistory, document: doc, cursor: { line: withHistory.cursor.line + 1, col: 0 } };
+    return {
+      ...withHistory,
+      document: doc,
+      cursor: { line: withHistory.cursor.line + 1, col: 0 },
+      tempIndent: null,
+      marginRelease: false,
+    };
   }
 
   if (!ev.ctrl && ev.key === "Backspace") {
@@ -299,10 +338,64 @@ function resolveBlock(state: EditorState, key: string): EditorState {
       return moveBlock(state);
     case "n":
       // Start empty; an empty commit keeps the current name (see applyPromptKey).
-      return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "" } };
+      return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "", target: "filename" } };
     default:
       return state; // prefix already cleared by caller
   }
+}
+
+/** Resolve the second key of a ^O onscreen-format command. Unknown keys just clear the prefix. */
+function resolveOnscreen(state: EditorState, key: string): EditorState {
+  const { ruler, cursor } = state;
+  switch (key) {
+    case "l":
+      return { ...state, prompt: { label: "LEFT MARGIN:", buffer: "", target: "leftMargin" } };
+    case "r":
+      return { ...state, prompt: { label: "RIGHT MARGIN:", buffer: "", target: "rightMargin" } };
+    case "s":
+      return { ...state, prompt: { label: "LINE SPACING:", buffer: "", target: "spacing" } };
+    case "c":
+      return centerLine(state);
+    case "j":
+      return { ...state, ruler: { ...ruler, justify: !ruler.justify } };
+    case "w":
+      return { ...state, ruler: { ...ruler, wordWrap: !ruler.wordWrap } };
+    case "t":
+      return { ...state, ruler: { ...ruler, showRuler: !ruler.showRuler } };
+    case "d":
+      return { ...state, showControls: !state.showControls };
+    case "i": {
+      if (ruler.tabs.includes(cursor.col)) return state;
+      const tabs = [...ruler.tabs, cursor.col].sort((a, b) => a - b);
+      return { ...state, ruler: { ...ruler, tabs } };
+    }
+    case "n": {
+      const tabs = ruler.tabs.filter((t) => t !== cursor.col);
+      return { ...state, ruler: { ...ruler, tabs } };
+    }
+    case "x":
+      return { ...state, marginRelease: true };
+    case "g": {
+      const next = ruler.tabs.find((t) => t > ruler.left);
+      return { ...state, tempIndent: next ?? ruler.left };
+    }
+    default:
+      return state; // prefix already cleared by caller
+  }
+}
+
+function centerLine(state: EditorState): EditorState {
+  const { document, cursor, ruler } = state;
+  const line = document.lines[cursor.line] ?? "";
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return state;
+  const width = ruler.right - ruler.left + 1;
+  const col = Math.max(ruler.left, ruler.left + Math.floor((width - trimmed.length) / 2));
+  const newLine = " ".repeat(col) + trimmed;
+  const withHistory = remember(state, null);
+  const doc = deleteRange(withHistory.document, { line: cursor.line, col: 0 }, { line: cursor.line, col: line.length });
+  const inserted = insertText(doc, { line: cursor.line, col: 0 }, newLine);
+  return { ...withHistory, document: inserted, cursor: { line: cursor.line, col: newLine.length } };
 }
 
 function copyBlock(state: EditorState): EditorState {
@@ -396,8 +489,27 @@ function prevWord(doc: TextDocument, pos: Position): Position {
 function applyPromptKey(state: EditorState, ev: KeyEvent): EditorState {
   const prompt = state.prompt!;
   if (!ev.ctrl && ev.key === "Enter") {
-    const filename = prompt.buffer.length > 0 ? prompt.buffer : state.filename;
-    return { ...state, filename, prompt: null };
+    switch (prompt.target) {
+      case "filename": {
+        const filename = prompt.buffer.length > 0 ? prompt.buffer : state.filename;
+        return { ...state, filename, prompt: null };
+      }
+      case "leftMargin": {
+        const val = parseInt(prompt.buffer, 10);
+        if (isNaN(val) || val < 1 || val - 1 >= state.ruler.right) return { ...state, prompt: null };
+        return { ...state, ruler: { ...state.ruler, left: val - 1 }, prompt: null };
+      }
+      case "rightMargin": {
+        const val = parseInt(prompt.buffer, 10);
+        if (isNaN(val) || val < 1 || state.ruler.left >= val - 1) return { ...state, prompt: null };
+        return { ...state, ruler: { ...state.ruler, right: val - 1 }, prompt: null };
+      }
+      case "spacing": {
+        const val = parseInt(prompt.buffer, 10);
+        if (isNaN(val) || val < 1 || val > 9) return { ...state, prompt: null };
+        return { ...state, ruler: { ...state.ruler, spacing: val }, prompt: null };
+      }
+    }
   }
   if (!ev.ctrl && ev.key === "Escape") {
     return { ...state, prompt: null };
