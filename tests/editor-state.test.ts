@@ -349,3 +349,88 @@ describe("^Q quick movement prefix", () => {
     expect(s.document.lines).toEqual(["abc"]);
   });
 });
+
+describe("undo/redo", () => {
+  function undo(s: ReturnType<typeof createEditorState>) {
+    return applyKey(s, { key: "u", ctrl: true });
+  }
+  function redo(s: ReturnType<typeof createEditorState>) {
+    s = applyKey(s, { key: "q", ctrl: true });
+    return applyKey(s, { key: "u", ctrl: false });
+  }
+
+  it("typing 3 chars then ^U restores the original doc and cursor in one step", () => {
+    let s = createEditorState("");
+    const original = { document: s.document, cursor: s.cursor };
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = applyKey(s, { key: "c", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(original.document.lines);
+    expect(s.cursor).toEqual(original.cursor);
+  });
+
+  it("backspaces coalesce as their own run, separate from typing", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    // seal the typing chunk with a movement
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    const beforeBackspaces = { document: s.document, cursor: s.cursor };
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    s = { ...s, cursor: { line: 0, col: 0 } }; // reposition without going through applyKey
+    expect(s.document.lines).toEqual(["b"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(beforeBackspaces.document.lines);
+    expect(s.cursor).toEqual(beforeBackspaces.cursor);
+  });
+
+  it("movement seals a chunk: type 'a', move left, type 'b' -> two undo steps", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "ArrowLeft", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["ba"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual(["a"]);
+    s = undo(s);
+    expect(s.document.lines).toEqual([""]);
+  });
+
+  it("^Q U redoes what ^U undid", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = applyKey(s, { key: "c", ctrl: false });
+    s = undo(s);
+    expect(s.document.lines).toEqual([""]);
+    s = redo(s);
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+
+  it("a new edit after ^U clears the redo stack", () => {
+    let s = createEditorState("");
+    s = applyKey(s, { key: "a", ctrl: false });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = undo(s);
+    expect(s.history.redo.length).toBe(1);
+    s = applyKey(s, { key: "z", ctrl: false });
+    expect(s.history.redo.length).toBe(0);
+  });
+
+  it("caps the undo stack at 200 snapshots", () => {
+    let s = createEditorState("");
+    for (let i = 0; i < 250; i++) {
+      s = applyKey(s, { key: "a", ctrl: false });
+      s = applyKey(s, { key: "ArrowLeft", ctrl: false }); // seal chunk each time
+    }
+    expect(s.history.undo.length).toBe(200);
+  });
+
+  it("^U on an empty undo stack is a no-op", () => {
+    let s = createEditorState("abc");
+    s = undo(s);
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+});

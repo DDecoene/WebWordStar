@@ -3,6 +3,12 @@ import { createDocument, insertText, deleteRange, splitLine, getRange, insertMul
 
 export type EditorMode = "insert" | "overtype";
 export type Pending = null | "quick" | "block"; // ^Q quick, ^K block
+export type EditKind = "type" | "backspace";
+
+export interface HistorySnapshot {
+  document: TextDocument;
+  cursor: Position;
+}
 
 export interface EditorState {
   document: TextDocument;
@@ -14,12 +20,16 @@ export interface EditorState {
   blockEnd: Position | null;
   hideBlock: boolean;
   prompt: { label: string; buffer: string } | null;
+  history: { undo: HistorySnapshot[]; redo: HistorySnapshot[] };
+  lastEdit: EditKind | null;
 }
 
 export interface KeyEvent {
   key: string;
   ctrl: boolean;
 }
+
+const UNDO_LIMIT = 200;
 
 export function createEditorState(text = "", filename = "UNTITLED"): EditorState {
   return {
@@ -32,6 +42,53 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     blockEnd: null,
     hideBlock: false,
     prompt: null,
+    history: { undo: [], redo: [] },
+    lastEdit: null,
+  };
+}
+
+/** Seal the current undo chunk (movement, mode toggle, prefixes): just clear the coalescing marker. */
+function sealChunk(state: EditorState): EditorState {
+  return state.lastEdit === null ? state : { ...state, lastEdit: null };
+}
+
+/**
+ * Record the pre-mutation snapshot before an edit of `kind`. Consecutive edits of the
+ * same coalescable kind ("type"/"backspace") share one undo step; any other kind (or a
+ * change of kind) pushes a fresh snapshot and clears the redo stack.
+ */
+function remember(state: EditorState, kind: EditKind | null): EditorState {
+  if (kind !== null && kind === state.lastEdit) return state;
+  const snapshot: HistorySnapshot = { document: state.document, cursor: state.cursor };
+  const undo = [...state.history.undo, snapshot].slice(-UNDO_LIMIT);
+  return { ...state, history: { undo, redo: [] }, lastEdit: kind };
+}
+
+function undo(state: EditorState): EditorState {
+  const { undo: undoStack, redo: redoStack } = state.history;
+  if (undoStack.length === 0) return state;
+  const snapshot = undoStack[undoStack.length - 1]!;
+  const current: HistorySnapshot = { document: state.document, cursor: state.cursor };
+  return {
+    ...state,
+    document: snapshot.document,
+    cursor: snapshot.cursor,
+    history: { undo: undoStack.slice(0, -1), redo: [...redoStack, current] },
+    lastEdit: null,
+  };
+}
+
+function redo(state: EditorState): EditorState {
+  const { undo: undoStack, redo: redoStack } = state.history;
+  if (redoStack.length === 0) return state;
+  const snapshot = redoStack[redoStack.length - 1]!;
+  const current: HistorySnapshot = { document: state.document, cursor: state.cursor };
+  return {
+    ...state,
+    document: snapshot.document,
+    cursor: snapshot.cursor,
+    history: { undo: [...undoStack, current], redo: redoStack.slice(0, -1) },
+    lastEdit: null,
   };
 }
 
@@ -64,22 +121,28 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
 
   // ^Q — begin a quick-movement prefix
   if (ev.ctrl && ev.key.toLowerCase() === "q") {
-    return { ...state, pending: "quick" };
+    return { ...sealChunk(state), pending: "quick" };
   }
 
   // ^K — begin a block command prefix
   if (ev.ctrl && ev.key.toLowerCase() === "k") {
-    return { ...state, pending: "block" };
+    return { ...sealChunk(state), pending: "block" };
   }
 
   // ^V — toggle insert/overtype
   if (ev.ctrl && ev.key.toLowerCase() === "v") {
-    return { ...state, mode: state.mode === "insert" ? "overtype" : "insert" };
+    return { ...sealChunk(state), mode: state.mode === "insert" ? "overtype" : "insert" };
+  }
+
+  // ^U — undo
+  if (ev.ctrl && ev.key.toLowerCase() === "u") {
+    return undo(state);
   }
 
   if (!ev.ctrl && ev.key === "Enter") {
-    const doc = splitLine(state.document, state.cursor);
-    return { ...state, document: doc, cursor: { line: state.cursor.line + 1, col: 0 } };
+    const withHistory = remember(state, null);
+    const doc = splitLine(withHistory.document, withHistory.cursor);
+    return { ...withHistory, document: doc, cursor: { line: withHistory.cursor.line + 1, col: 0 } };
   }
 
   if (!ev.ctrl && ev.key === "Backspace") {
@@ -91,13 +154,13 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   }
 
   if (ev.ctrl) {
-    const moved = moveDiamond(state, ev.key.toLowerCase());
+    const moved = moveDiamond(sealChunk(state), ev.key.toLowerCase());
     if (moved) return moved;
   }
 
   // Arrow keys are modern alternates for the diamond's character moves.
   if (!ev.ctrl && ev.key in ARROWS) {
-    const moved = moveDiamond(state, ARROWS[ev.key]!);
+    const moved = moveDiamond(sealChunk(state), ARROWS[ev.key]!);
     if (moved) return moved;
   }
 
@@ -105,30 +168,33 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
     return typeChar(state, ev.key);
   }
 
-  return state;
+  return sealChunk(state);
 }
 
 function typeChar(state: EditorState, ch: string): EditorState {
-  const { document, cursor, mode } = state;
+  const withHistory = remember(state, "type");
+  const { document, cursor, mode } = withHistory;
   const atEndOfLine = cursor.col >= lineLength(document, cursor.line);
   let doc = document;
   if (mode === "overtype" && !atEndOfLine) {
     doc = deleteRange(doc, cursor, { line: cursor.line, col: cursor.col + 1 });
   }
   doc = insertText(doc, cursor, ch);
-  return { ...state, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
+  return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
 }
 
 function backspace(state: EditorState): EditorState {
   const { document, cursor } = state;
   if (cursor.col > 0) {
+    const withHistory = remember(state, "backspace");
     const doc = deleteRange(document, { line: cursor.line, col: cursor.col - 1 }, cursor);
-    return { ...state, document: doc, cursor: { line: cursor.line, col: cursor.col - 1 } };
+    return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col - 1 } };
   }
   if (cursor.line > 0) {
+    const withHistory = remember(state, "backspace");
     const prevLen = lineLength(document, cursor.line - 1);
     const doc = deleteRange(document, { line: cursor.line - 1, col: prevLen }, { line: cursor.line, col: 0 });
-    return { ...state, document: doc, cursor: { line: cursor.line - 1, col: prevLen } };
+    return { ...withHistory, document: doc, cursor: { line: cursor.line - 1, col: prevLen } };
   }
   return state;
 }
@@ -136,12 +202,14 @@ function backspace(state: EditorState): EditorState {
 function deleteForward(state: EditorState): EditorState {
   const { document, cursor } = state;
   if (cursor.col < lineLength(document, cursor.line)) {
+    const withHistory = remember(state, null);
     const doc = deleteRange(document, cursor, { line: cursor.line, col: cursor.col + 1 });
-    return { ...state, document: doc };
+    return { ...withHistory, document: doc };
   }
   if (cursor.line < document.lines.length - 1) {
+    const withHistory = remember(state, null);
     const doc = deleteRange(document, cursor, { line: cursor.line + 1, col: 0 });
-    return { ...state, document: doc };
+    return { ...withHistory, document: doc };
   }
   return state;
 }
@@ -197,6 +265,8 @@ function resolveQuick(state: EditorState, key: string): EditorState {
       const last = document.lines.length - 1;
       return { ...state, cursor: { line: last, col: lineLength(document, last) } };
     }
+    case "u": // ^Q U — redo
+      return redo(state);
     default:
       return state; // prefix already cleared by caller
   }
@@ -236,16 +306,18 @@ function resolveBlock(state: EditorState, key: string): EditorState {
 function copyBlock(state: EditorState): EditorState {
   const block = orderedBlock(state);
   if (!block) return state;
-  const text = getRange(state.document, block.start, block.end);
-  const { document, end } = insertMultiline(state.document, state.cursor, text);
-  return { ...state, document, cursor: end, blockStart: null, blockEnd: null };
+  const withHistory = remember(state, null);
+  const text = getRange(withHistory.document, block.start, block.end);
+  const { document, end } = insertMultiline(withHistory.document, withHistory.cursor, text);
+  return { ...withHistory, document, cursor: end, blockStart: null, blockEnd: null };
 }
 
 function deleteBlock(state: EditorState): EditorState {
   const block = orderedBlock(state);
   if (!block) return state;
-  const document = deleteRange(state.document, block.start, block.end);
-  return { ...state, document, cursor: block.start, blockStart: null, blockEnd: null };
+  const withHistory = remember(state, null);
+  const document = deleteRange(withHistory.document, block.start, block.end);
+  return { ...withHistory, document, cursor: block.start, blockStart: null, blockEnd: null };
 }
 
 // TODO: Unicode-aware word boundaries (currently ASCII-only via \w)
