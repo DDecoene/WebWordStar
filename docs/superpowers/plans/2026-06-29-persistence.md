@@ -1,5 +1,7 @@
 # Persistence Implementation Plan (v1.0.0 — Stage 4)
 
+> ✅ **Shipped** — merged into `release/v1.0.0` (PR #13, issue #7).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make documents always-saved: a UUID in the URL identifies each document, an editable title is stored alongside it, and content is continuously auto-persisted to SQLite over a WebSocket — no manual save.
