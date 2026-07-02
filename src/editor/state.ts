@@ -1,5 +1,6 @@
 import type { Position, TextDocument } from "../shared/types";
 import { createDocument, insertText, deleteRange, splitLine, getRange, insertMultiline } from "../shared/document";
+import { displayWidth, wrapPoint, reflowParagraph } from "../shared/wrap";
 
 export type EditorMode = "insert" | "overtype";
 export type Pending = null | "quick" | "block" | "onscreen"; // ^Q quick, ^K block, ^O onscreen format
@@ -172,6 +173,11 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
     return undo(state);
   }
 
+  // ^B — reflow the current paragraph to the ruler margins
+  if (ev.ctrl && ev.key.toLowerCase() === "b") {
+    return reflowParagraphAt(state);
+  }
+
   if (!ev.ctrl && ev.key === "Enter") {
     const withHistory = remember(state, null);
     const doc = splitLine(withHistory.document, withHistory.cursor);
@@ -219,7 +225,65 @@ function typeChar(state: EditorState, ch: string): EditorState {
     doc = deleteRange(doc, cursor, { line: cursor.line, col: cursor.col + 1 });
   }
   doc = insertText(doc, cursor, ch);
-  return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
+  const newCursor: Position = { line: cursor.line, col: cursor.col + 1 };
+  const next = { ...withHistory, document: doc, cursor: newCursor };
+
+  if (!next.ruler.wordWrap || next.marginRelease) return next;
+
+  const line = doc.lines[newCursor.line] ?? "";
+  if (displayWidth(line) <= next.ruler.right + 1) return next;
+
+  const breakAt = wrapPoint(line, next.ruler.right, next.ruler.left);
+  if (breakAt === null) return next;
+
+  const wasInSpill = newCursor.col > breakAt;
+  // Trim a single trailing space at the break point: the space that triggered the
+  // break is consumed by the wrap itself, not carried onto either line.
+  const trimmedBreak = line[breakAt - 1] === " " ? breakAt - 1 : breakAt;
+  const trailingTrim = breakAt - trimmedBreak;
+  const splitPos: Position = { line: newCursor.line, col: breakAt };
+  let wrappedDoc = splitLine(doc, splitPos, "soft");
+  if (trailingTrim > 0) {
+    wrappedDoc = deleteRange(
+      wrappedDoc,
+      { line: newCursor.line, col: trimmedBreak },
+      { line: newCursor.line, col: breakAt },
+    );
+  }
+  const indent = " ".repeat(next.tempIndent ?? next.ruler.left);
+  const spilled = (wrappedDoc.lines[newCursor.line + 1] ?? "").replace(/^ +/, "");
+  wrappedDoc = deleteRange(
+    wrappedDoc,
+    { line: newCursor.line + 1, col: 0 },
+    { line: newCursor.line + 1, col: (wrappedDoc.lines[newCursor.line + 1] ?? "").length },
+  );
+  wrappedDoc = insertText(wrappedDoc, { line: newCursor.line + 1, col: 0 }, indent + spilled);
+
+  const wrappedCursor: Position = wasInSpill
+    ? { line: newCursor.line + 1, col: indent.length + (newCursor.col - breakAt) }
+    : newCursor;
+
+  return { ...next, document: wrappedDoc, cursor: wrappedCursor };
+}
+
+/** Find the start of the paragraph containing `line` (scan back past soft breaks). */
+function paragraphStart(doc: TextDocument, line: number): number {
+  let start = line;
+  while (start > 0 && doc.returns[start - 1] === "soft") start--;
+  return start;
+}
+
+function reflowParagraphAt(state: EditorState): EditorState {
+  const withHistory = remember(state, null);
+  const { document, cursor, ruler } = withHistory;
+  const fromLine = paragraphStart(document, cursor.line);
+  const { document: reflowed, position } = reflowParagraph(
+    document,
+    fromLine,
+    { left: ruler.left, right: ruler.right, justify: ruler.justify },
+    cursor,
+  );
+  return sealChunk({ ...withHistory, document: reflowed, cursor: position });
 }
 
 function backspace(state: EditorState): EditorState {

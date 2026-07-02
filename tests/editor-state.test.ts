@@ -682,3 +682,66 @@ describe("^O onscreen format", () => {
     expect(s.filename).toBe("MYDOC");
   });
 });
+
+describe("word wrap", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+  function type(s: ReturnType<typeof createEditorState>, text: string) {
+    for (const ch of text) s = applyKey(s, { key: ch, ctrl: false });
+    return s;
+  }
+  function narrowRuler(s: ReturnType<typeof createEditorState>, right: number) {
+    return { ...s, ruler: { ...s.ruler, right } };
+  }
+
+  it("typing past the right margin moves the current word to a new soft-return line", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6); // maxWidth = 7
+    s = type(s, "aaa bbb");
+    // "aaa bbb" is width 7, fits exactly. Typing one more char overflows.
+    s = type(s, "c");
+    expect(s.document.lines[0]).toBe("aaa");
+    expect(s.document.lines[1]).toBe("bbbc");
+    expect(s.document.returns[0]).toBe("soft");
+    expect(s.cursor).toEqual({ line: 1, col: 4 });
+  });
+
+  it("^O X (margin release) suppresses wrap for the current line", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6);
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "x", ctrl: false });
+    s = type(s, "aaa bbbc");
+    expect(s.document.lines).toEqual(["aaa bbbc"]);
+  });
+
+  it("^O W (word wrap off) disables wrapping", () => {
+    let s = createEditorState("");
+    s = narrowRuler(s, 6);
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "w", ctrl: false });
+    expect(s.ruler.wordWrap).toBe(false);
+    s = type(s, "aaa bbbc");
+    expect(s.document.lines).toEqual(["aaa bbbc"]);
+  });
+
+  it("^B reflows a manually-constructed ragged paragraph", () => {
+    let s = createEditorState("the quick\nbrown fox\njumps");
+    s = narrowRuler(s, 10);
+    s = { ...s, document: { ...s.document, returns: ["soft", "soft", "hard"] } };
+    s = applyKey(s, ctrl("b"));
+    expect(s.document.lines.join("|")).toBe("the quick|brown fox|jumps");
+  });
+
+  it("^B is undoable with ^U", () => {
+    let s = createEditorState("the\nquick\nbrown\nfox\njumps");
+    s = narrowRuler(s, 10);
+    s = { ...s, document: { ...s.document, returns: ["soft", "soft", "soft", "soft", "hard"] } };
+    const before = s.document.lines.slice();
+    s = applyKey(s, ctrl("b"));
+    expect(s.document.lines).not.toEqual(before);
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines).toEqual(before);
+  });
+});
