@@ -745,3 +745,57 @@ describe("word wrap", () => {
     expect(s.document.lines).toEqual(before);
   });
 });
+
+describe("^P print controls", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+
+  it("^P B inserts the bold control char at the cursor and advances the cursor", () => {
+    let s = createEditorState("ab");
+    s = { ...s, cursor: { line: 0, col: 1 } };
+    s = applyKey(s, ctrl("p"));
+    expect(s.pending).toBe("print");
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["a\x02b"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+    expect(s.pending).toBeNull();
+  });
+
+  it("maps every ^P sub-key to its control character", () => {
+    const mapping: Record<string, string> = {
+      b: "\x02",
+      s: "\x13",
+      y: "\x19",
+      d: "\x04",
+      x: "\x18",
+      t: "\x14",
+      v: "\x16",
+      o: "\x0F",
+    };
+    for (const [key, ch] of Object.entries(mapping)) {
+      let s = createEditorState("");
+      s = applyKey(s, ctrl("p"));
+      s = applyKey(s, { key, ctrl: false });
+      expect(s.document.lines).toEqual([ch]);
+    }
+  });
+
+  it("ignores an unknown ^P sub-key", () => {
+    let s = createEditorState("ab");
+    s = applyKey(s, ctrl("p"));
+    s = applyKey(s, { key: "z", ctrl: false });
+    expect(s.document.lines).toEqual(["ab"]);
+    expect(s.pending).toBeNull();
+  });
+
+  it("^P insertion is undoable with ^U", () => {
+    let s = createEditorState("ab");
+    s = { ...s, cursor: { line: 0, col: 1 } };
+    s = applyKey(s, ctrl("p"));
+    s = applyKey(s, { key: "b", ctrl: false });
+    expect(s.document.lines).toEqual(["a\x02b"]);
+    s = applyKey(s, ctrl("u"));
+    expect(s.document.lines).toEqual(["ab"]);
+  });
+});

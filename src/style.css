@@ -68,3 +68,41 @@ body {
   background: #264f78;
   color: #ffffff;
 }
+
+/* Embedded print-control marker (^P), shown as inverse video, e.g. "B" for bold. */
+.ctrl {
+  background: #0b0b0b;
+  color: #c8c8c8;
+}
+
+/* Print-control (^P) styled text between markers. */
+.fmt-bold {
+  font-weight: bold;
+}
+
+.fmt-underline {
+  text-decoration: underline;
+}
+
+.fmt-italic {
+  font-style: italic;
+}
+
+.fmt-double {
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+.fmt-strike {
+  text-decoration: line-through;
+}
+
+.fmt-super {
+  vertical-align: super;
+  font-size: 0.8em;
+}
+
+.fmt-sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}

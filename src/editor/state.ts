@@ -3,7 +3,7 @@ import { createDocument, insertText, deleteRange, splitLine, getRange, insertMul
 import { displayWidth, wrapPoint, reflowParagraph } from "../shared/wrap";
 
 export type EditorMode = "insert" | "overtype";
-export type Pending = null | "quick" | "block" | "onscreen"; // ^Q quick, ^K block, ^O onscreen format
+export type Pending = null | "quick" | "block" | "onscreen" | "print"; // ^Q quick, ^K block, ^O onscreen format, ^P print controls
 export type EditKind = "type" | "backspace";
 export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing";
 
@@ -147,6 +147,9 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   if (state.pending === "onscreen") {
     return resolveOnscreen({ ...state, pending: null }, ev.key.toLowerCase());
   }
+  if (state.pending === "print") {
+    return resolvePrint({ ...state, pending: null }, ev.key.toLowerCase());
+  }
 
   // ^Q — begin a quick-movement prefix
   if (ev.ctrl && ev.key.toLowerCase() === "q") {
@@ -161,6 +164,11 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   // ^O — begin an onscreen-format command prefix
   if (ev.ctrl && ev.key.toLowerCase() === "o") {
     return { ...sealChunk(state), pending: "onscreen" };
+  }
+
+  // ^P — begin a print-control (embedded control char) prefix
+  if (ev.ctrl && ev.key.toLowerCase() === "p") {
+    return { ...sealChunk(state), pending: "print" };
   }
 
   // ^V — toggle insert/overtype
@@ -446,6 +454,28 @@ function resolveOnscreen(state: EditorState, key: string): EditorState {
     default:
       return state; // prefix already cleared by caller
   }
+}
+
+/** Mapping from ^P sub-key to the embedded control character it inserts. */
+export const PRINT_CONTROLS: Record<string, string> = {
+  b: "\x02",
+  s: "\x13",
+  y: "\x19",
+  d: "\x04",
+  x: "\x18",
+  t: "\x14",
+  v: "\x16",
+  o: "\x0F",
+};
+
+/** Resolve the second key of a ^P print-control command: insert one control char. */
+function resolvePrint(state: EditorState, key: string): EditorState {
+  const ch = PRINT_CONTROLS[key];
+  if (!ch) return state;
+  const withHistory = remember(state, null);
+  const { document, cursor } = withHistory;
+  const doc = insertText(document, cursor, ch);
+  return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
 }
 
 function centerLine(state: EditorState): EditorState {

@@ -90,3 +90,45 @@ describe("block highlight rendering", () => {
     expect(renderEditor(s)).not.toContain('class="block"');
   });
 });
+
+describe("print control rendering", () => {
+  function screenOf(html: string): string {
+    return html.split('data-testid="screen">')[1]!;
+  }
+
+  it("shown mode renders marker cells with class ctrl and styles the enclosed text", () => {
+    const s = { ...createEditorState("a\x02bold\x02b"), cursor: { line: 0, col: 20 } };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain('<span class="ctrl">B</span>');
+    expect(html).toContain('<span class="fmt-bold">bold</span>');
+  });
+
+  it("hidden mode omits marker cells but still applies the style", () => {
+    const s = {
+      ...createEditorState("a\x02bold\x02b"),
+      cursor: { line: 0, col: 20 },
+      showControls: false,
+    };
+    const html = screenOf(renderEditor(s));
+    expect(html).not.toContain("ctrl");
+    expect(html).toContain('<span class="fmt-bold">bold</span>');
+  });
+
+  it("hidden mode: cursor on a marker char highlights the next visible character", () => {
+    // "a\x02bold" — cursor sits on the marker (col 1); with markers hidden, the
+    // highlighted cell should be the first visible char after it ("b" of "bold").
+    const s = {
+      ...createEditorState("a\x02bold"),
+      cursor: { line: 0, col: 1 },
+      showControls: false,
+    };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain('<span class="fmt-bold cursor">b</span>');
+  });
+
+  it("renders the non-break-space control char as a plain space", () => {
+    const s = { ...createEditorState("a\x0Fb"), cursor: { line: 0, col: 20 } };
+    const html = screenOf(renderEditor(s));
+    expect(html).toContain("a b");
+  });
+});

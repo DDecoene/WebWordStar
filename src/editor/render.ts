@@ -10,7 +10,27 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
-type CellClass = "cursor" | "block" | null;
+type CellClass = string | null;
+
+/** Embedded print-control characters: mnemonic letter shown when controls are visible, and the
+ *  CSS style class toggled on the text between an opening and matching closing marker. */
+const CONTROL_STYLES: Record<string, { mnemonic: string; style: string }> = {
+  "\x02": { mnemonic: "B", style: "fmt-bold" },
+  "\x13": { mnemonic: "S", style: "fmt-underline" },
+  "\x19": { mnemonic: "Y", style: "fmt-italic" },
+  "\x04": { mnemonic: "D", style: "fmt-double" },
+  "\x18": { mnemonic: "X", style: "fmt-strike" },
+  "\x14": { mnemonic: "T", style: "fmt-super" },
+  "\x16": { mnemonic: "V", style: "fmt-sub" },
+};
+
+/** Non-break space control char: renders as a plain space, no style toggle. */
+const NBSP_CONTROL = "\x0F";
+
+function combineClasses(...classes: (string | null)[]): CellClass {
+  const parts = classes.filter((c): c is string => !!c);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
 
 /** Coalesce consecutive cells with the same class into spans; null runs are raw escaped text. */
 function cellsToHtml(cells: { ch: string; cls: CellClass }[]): string {
@@ -52,16 +72,50 @@ function renderLine(
   cursorLine: number,
   cursorCol: number,
   block: ReturnType<typeof orderedBlock>,
+  showControls: boolean,
 ): string {
   // One extra virtual cell at end-of-line so the block cursor has a cell to occupy.
   const length = text.length;
   const cells: { ch: string; cls: CellClass }[] = [];
+  const activeStyles = new Set<string>();
+  let pendingCursor = false; // cursor sat on a marker char that hidden mode skipped; land on next visible cell
+
   for (let col = 0; col <= length; col++) {
-    const ch = col < length ? text[col]! : " ";
-    let cls: CellClass = null;
-    if (inBlock(block, line, col, length)) cls = "block";
-    if (line === cursorLine && col === cursorCol) cls = "cursor"; // cursor wins
-    if (col === length && cls !== "cursor") continue; // don't emit trailing virtual cell unless it's the cursor
+    const isVirtual = col === length;
+    const ch = isVirtual ? " " : text[col]!;
+    const isCursorHere = line === cursorLine && col === cursorCol;
+    const meta = !isVirtual ? CONTROL_STYLES[ch] : undefined;
+
+    if (!isVirtual && ch === NBSP_CONTROL) {
+      const styleCls = activeStyles.size > 0 ? [...activeStyles].join(" ") : null;
+      const isCursor = isCursorHere || pendingCursor;
+      const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
+      pendingCursor = false;
+      cells.push({ ch: " ", cls: combineClasses(styleCls, blockCls, isCursor ? "cursor" : null) });
+      continue;
+    }
+
+    if (!isVirtual && meta) {
+      if (activeStyles.has(meta.style)) activeStyles.delete(meta.style);
+      else activeStyles.add(meta.style);
+
+      if (showControls) {
+        const isCursor = isCursorHere || pendingCursor;
+        const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
+        pendingCursor = false;
+        cells.push({ ch: meta.mnemonic, cls: combineClasses("ctrl", blockCls, isCursor ? "cursor" : null) });
+      } else if (isCursorHere) {
+        pendingCursor = true;
+      }
+      continue;
+    }
+
+    const isCursor = isCursorHere || pendingCursor;
+    const styleCls = activeStyles.size > 0 ? [...activeStyles].join(" ") : null;
+    const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
+    const cls = combineClasses(styleCls, blockCls, isCursor ? "cursor" : null);
+    if (isVirtual && !isCursor) continue; // don't emit trailing virtual cell unless it's the cursor
+    pendingCursor = false;
     cells.push({ ch, cls });
   }
   return cellsToHtml(cells);
@@ -92,7 +146,7 @@ export function renderEditor(state: EditorState): string {
   const cursorLine = state.prompt ? -1 : cursor.line;
 
   const screen = document.lines
-    .map((text, i) => renderLine(text, i, cursorLine, cursor.col, block))
+    .map((text, i) => renderLine(text, i, cursorLine, cursor.col, block, state.showControls))
     .join("\n");
 
   return (
