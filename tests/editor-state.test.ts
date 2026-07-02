@@ -290,6 +290,92 @@ describe("^KC copy / ^KY delete", () => {
   });
 });
 
+describe("block move ^KV", () => {
+  function markBlock(s: ReturnType<typeof createEditorState>, start: { line: number; col: number }, end: { line: number; col: number }) {
+    s = { ...s, cursor: start };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false });
+    s = { ...s, cursor: end };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false });
+    return s;
+  }
+
+  it("moves a block forward (block before cursor)", () => {
+    // "abcdef", block [0,1)-[0,3) ("bc"), cursor at col 6.
+    // Delete "bc" -> "adef"; cursor col 6 maps to col 4; insert "bc" at 4 -> "adefbc".
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 3 });
+    s = { ...s, cursor: { line: 0, col: 6 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["adefbc"]);
+    expect(s.cursor).toEqual({ line: 0, col: 6 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("moves a block backward (cursor before block)", () => {
+    // "abcdef", block [0,3)-[0,5) ("de"), cursor at col 0.
+    // Insert "de" at col 0 -> "deabcdef" minus removed range... compute: delete "de" -> "abcf";
+    // insert "de" at col 0 -> "deabcf"; cursor ends at col 2.
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 3 }, { line: 0, col: 5 });
+    s = { ...s, cursor: { line: 0, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["deabcf"]);
+    expect(s.cursor).toEqual({ line: 0, col: 2 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("moves a multi-line block across lines", () => {
+    let s = createEditorState("ab\ncd\nef\n");
+    s = markBlock(s, { line: 0, col: 0 }, { line: 1, col: 2 }); // "ab\ncd"
+    s = { ...s, cursor: { line: 3, col: 0 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    // deleteRange("ab\ncd") from lines ["ab","cd","ef",""] leaves ["","ef",""].
+    // cursor was on line 3, col 0 (after end.line=1): shifts up by (1-0)=1 -> line 2.
+    // insert "ab\ncd" at {line:2, col:0} -> ["","ef","ab","cd"].
+    expect(s.document.lines).toEqual(["", "ef", "ab", "cd"]);
+    expect(s.cursor).toEqual({ line: 3, col: 2 });
+    expect(s.blockStart).toBeNull();
+    expect(s.blockEnd).toBeNull();
+  });
+
+  it("is a no-op when the cursor is inside the block", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 4 }); // "bcd"
+    s = { ...s, cursor: { line: 0, col: 2 } }; // inside block
+    const before = s.document;
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document).toBe(before);
+    expect(s.blockStart).toEqual({ line: 0, col: 1 });
+    expect(s.blockEnd).toEqual({ line: 0, col: 4 });
+  });
+
+  it("is a no-op when markers are unset", () => {
+    let s = createEditorState("abc");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["abc"]);
+  });
+
+  it("undo restores the pre-move document", () => {
+    let s = createEditorState("abcdef");
+    s = markBlock(s, { line: 0, col: 1 }, { line: 0, col: 3 });
+    s = { ...s, cursor: { line: 0, col: 6 } };
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false });
+    expect(s.document.lines).toEqual(["adefbc"]);
+    s = applyKey(s, { key: "u", ctrl: true });
+    expect(s.document.lines).toEqual(["abcdef"]);
+  });
+});
+
 describe("arrow-key movement alternates", () => {
   it("ArrowRight / ArrowLeft move like ^D / ^S", () => {
     let s = createEditorState("abc");

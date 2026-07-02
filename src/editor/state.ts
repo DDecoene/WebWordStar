@@ -295,6 +295,8 @@ function resolveBlock(state: EditorState, key: string): EditorState {
       return copyBlock(state);
     case "y":
       return deleteBlock(state);
+    case "v":
+      return moveBlock(state);
     case "n":
       // Start empty; an empty commit keeps the current name (see applyPromptKey).
       return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "" } };
@@ -318,6 +320,46 @@ function deleteBlock(state: EditorState): EditorState {
   const withHistory = remember(state, null);
   const document = deleteRange(withHistory.document, block.start, block.end);
   return { ...withHistory, document, cursor: block.start, blockStart: null, blockEnd: null };
+}
+
+function isBeforePosition(a: Position, b: Position): boolean {
+  return a.line < b.line || (a.line === b.line && a.col < b.col);
+}
+
+/** True if `pos` lies within [start, end) (inclusive start, exclusive end). */
+function isInsideBlock(pos: Position, start: Position, end: Position): boolean {
+  return !isBeforePosition(pos, start) && isBeforePosition(pos, end);
+}
+
+function moveBlock(state: EditorState): EditorState {
+  const block = orderedBlock(state);
+  if (!block) return state;
+  const { start, end } = block;
+  const cursor = state.cursor;
+  if (isInsideBlock(cursor, start, end)) return state;
+
+  const withHistory = remember(state, null);
+  const text = getRange(withHistory.document, start, end);
+  const document = deleteRange(withHistory.document, start, end);
+
+  let target: Position;
+  if (isBeforePosition(cursor, start)) {
+    target = cursor;
+  } else if (cursor.line > end.line) {
+    target = { line: cursor.line - (end.line - start.line), col: cursor.col };
+  } else {
+    // cursor.line === end.line && cursor.col >= end.col
+    target = { line: start.line, col: start.col + (cursor.col - end.col) };
+  }
+
+  const inserted = insertMultiline(document, target, text);
+  return {
+    ...withHistory,
+    document: inserted.document,
+    cursor: inserted.end,
+    blockStart: null,
+    blockEnd: null,
+  };
 }
 
 // TODO: Unicode-aware word boundaries (currently ASCII-only via \w)
