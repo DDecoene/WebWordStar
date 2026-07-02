@@ -29,8 +29,9 @@ if (app) {
   const wsUrl = `${window.location.origin.replace(/^http/, "ws")}/ws`;
   const client = new WsClient(wsUrl, docId!, (content, title) => {
     // Only adopt the snapshot when the user has not yet started editing
-    // (guards against a late-arriving snapshot wiping freshly typed content).
-    if (getText(state.document) === "") {
+    // (guards against a late-arriving snapshot wiping freshly typed content,
+    // or clobbering an in-progress prompt/prefix such as ^O R's margin prompt).
+    if (getText(state.document) === "" && state.prompt === null && state.pending === null) {
       state = createEditorState(content, title || "UNTITLED");
       paint();
     }
