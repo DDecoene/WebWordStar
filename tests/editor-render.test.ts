@@ -167,3 +167,30 @@ describe("ruler and flag column", () => {
     expect(screen).toContain('alpha<span class="flag"> </span>');
   });
 });
+
+describe("self-revealing menus", () => {
+  it("shows the block menu when pending is 'block', revealMenu is true, and helpLevel is high enough", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 3 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).toContain('data-testid="menu"');
+    expect(html).toContain("copy block");
+  });
+
+  it("hides the menu when helpLevel is too low", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 1 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).not.toContain('data-testid="menu"');
+  });
+
+  it("hides the menu when revealMenu is false", () => {
+    const s = { ...createEditorState(""), pending: "block" as const, helpLevel: 3 as const };
+    const html = renderEditor(s);
+    expect(html).not.toContain('data-testid="menu"');
+  });
+
+  it("hides the menu when nothing is pending", () => {
+    const s = { ...createEditorState(""), pending: null, helpLevel: 3 as const };
+    const html = renderEditor(s, { revealMenu: true });
+    expect(html).not.toContain('data-testid="menu"');
+  });
+});

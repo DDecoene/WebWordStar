@@ -1,5 +1,6 @@
 import type { EditorState } from "./state";
 import { orderedBlock } from "./state";
+import { MENUS } from "./menus";
 
 // NOTE: escapes only text-node characters (&, <, >). Does NOT escape quotes, so it must
 // NOT be used for HTML attribute values.
@@ -133,8 +134,24 @@ function renderRuler(ruler: EditorState["ruler"]): string {
   return escapeHtml(cells.join(""));
 }
 
+/** Render the self-revealing menu panel for the currently pending prefix, if applicable. */
+function renderMenu(state: EditorState, revealMenu: boolean): string {
+  if (!revealMenu || state.pending === null || state.helpLevel < 2) return "";
+  const menu = MENUS[state.pending];
+  if (!menu) return "";
+  const lines = menu.entries
+    .map(([key, desc]) => `<span class="menu-key">${escapeHtml(key)}</span> ${escapeHtml(desc)}`)
+    .join("\n");
+  return (
+    `<div class="menu" data-testid="menu">` +
+    `<div class="menu-title">${escapeHtml(menu.title)}</div>` +
+    lines +
+    `</div>`
+  );
+}
+
 /** Render the full editor (status line + screen) to an HTML string. */
-export function renderEditor(state: EditorState): string {
+export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } = {}): string {
   const { document, cursor, mode, filename } = state;
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
 
@@ -170,8 +187,11 @@ export function renderEditor(state: EditorState): string {
     ? `<div class="ruler" data-testid="ruler">${renderRuler(state.ruler)}</div>`
     : "";
 
+  const menuHtml = renderMenu(state, opts.revealMenu ?? false);
+
   return (
     `<div class="status" data-testid="status">${statusHtml}</div>` +
+    menuHtml +
     rulerHtml +
     `<pre class="screen" data-testid="screen">${screen}</pre>`
   );

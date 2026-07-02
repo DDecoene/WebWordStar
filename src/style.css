@@ -119,3 +119,26 @@ body {
   vertical-align: sub;
   font-size: 0.8em;
 }
+
+/* Self-revealing menu panel — shown after a ^Q/^K/^O/^P/^J prefix is held briefly. */
+.menu {
+  background: #161b22;
+  color: #c8c8c8;
+  border: 1px solid #1f6feb;
+  padding: 6px 10px;
+  white-space: pre;
+  user-select: none;
+}
+
+.menu-title {
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.menu-key {
+  color: #ffffff;
+  background: #1f6feb;
+  padding: 0 3px;
+}

@@ -799,3 +799,46 @@ describe("^P print controls", () => {
     expect(s.document.lines).toEqual(["ab"]);
   });
 });
+
+describe("help level", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+
+  it("defaults to help level 3", () => {
+    const s = createEditorState("");
+    expect(s.helpLevel).toBe(3);
+  });
+
+  it("^J H prompts for the help level and commits a valid value", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    expect(s.pending).toBe("help");
+    s = applyKey(s, { key: "h", ctrl: false });
+    expect(s.prompt).toEqual({ label: "HELP LEVEL (0-3):", buffer: "", target: "helpLevel" });
+    s = applyKey(s, { key: "1", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(1);
+    expect(s.prompt).toBeNull();
+  });
+
+  it("rejects an out-of-range help level and leaves helpLevel unchanged", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    s = applyKey(s, { key: "h", ctrl: false });
+    s = applyKey(s, { key: "5", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(3);
+    expect(s.prompt).toBeNull();
+  });
+
+  it("rejects a non-numeric help level and leaves helpLevel unchanged", () => {
+    let s = createEditorState("");
+    s = applyKey(s, ctrl("j"));
+    s = applyKey(s, { key: "h", ctrl: false });
+    s = applyKey(s, { key: "x", ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.helpLevel).toBe(3);
+    expect(s.prompt).toBeNull();
+  });
+});

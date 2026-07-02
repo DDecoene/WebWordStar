@@ -3,9 +3,9 @@ import { createDocument, insertText, deleteRange, splitLine, getRange, insertMul
 import { displayWidth, wrapPoint, reflowParagraph } from "../shared/wrap";
 
 export type EditorMode = "insert" | "overtype";
-export type Pending = null | "quick" | "block" | "onscreen" | "print"; // ^Q quick, ^K block, ^O onscreen format, ^P print controls
+export type Pending = null | "quick" | "block" | "onscreen" | "print" | "help"; // ^Q quick, ^K block, ^O onscreen format, ^P print controls, ^J help
 export type EditKind = "type" | "backspace";
-export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing";
+export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing" | "helpLevel";
 
 export interface HistorySnapshot {
   document: TextDocument;
@@ -44,6 +44,7 @@ export interface EditorState {
   showControls: boolean;
   marginRelease: boolean;
   tempIndent: number | null;
+  helpLevel: 0 | 1 | 2 | 3;
 }
 
 export interface KeyEvent {
@@ -70,6 +71,7 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     showControls: true,
     marginRelease: false,
     tempIndent: null,
+    helpLevel: 3,
   };
 }
 
@@ -150,6 +152,9 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   if (state.pending === "print") {
     return resolvePrint({ ...state, pending: null }, ev.key.toLowerCase());
   }
+  if (state.pending === "help") {
+    return resolveHelp({ ...state, pending: null }, ev.key.toLowerCase());
+  }
 
   // ^Q — begin a quick-movement prefix
   if (ev.ctrl && ev.key.toLowerCase() === "q") {
@@ -169,6 +174,11 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   // ^P — begin a print-control (embedded control char) prefix
   if (ev.ctrl && ev.key.toLowerCase() === "p") {
     return { ...sealChunk(state), pending: "print" };
+  }
+
+  // ^J — begin a help-level prefix
+  if (ev.ctrl && ev.key.toLowerCase() === "j") {
+    return { ...sealChunk(state), pending: "help" };
   }
 
   // ^V — toggle insert/overtype
@@ -478,6 +488,16 @@ function resolvePrint(state: EditorState, key: string): EditorState {
   return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
 }
 
+/** Resolve the second key of a ^J help command. Unknown keys just clear the prefix. */
+function resolveHelp(state: EditorState, key: string): EditorState {
+  switch (key) {
+    case "h":
+      return { ...state, prompt: { label: "HELP LEVEL (0-3):", buffer: "", target: "helpLevel" } };
+    default:
+      return state; // prefix already cleared by caller
+  }
+}
+
 function centerLine(state: EditorState): EditorState {
   const { document, cursor, ruler } = state;
   const line = document.lines[cursor.line] ?? "";
@@ -602,6 +622,11 @@ function applyPromptKey(state: EditorState, ev: KeyEvent): EditorState {
         const val = parseInt(prompt.buffer, 10);
         if (isNaN(val) || val < 1 || val > 9) return { ...state, prompt: null };
         return { ...state, ruler: { ...state.ruler, spacing: val }, prompt: null };
+      }
+      case "helpLevel": {
+        const val = parseInt(prompt.buffer, 10);
+        if (isNaN(val) || val < 0 || val > 3 || String(val) !== prompt.buffer.trim()) return { ...state, prompt: null };
+        return { ...state, helpLevel: val as 0 | 1 | 2 | 3, prompt: null };
       }
     }
   }

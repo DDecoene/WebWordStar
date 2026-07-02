@@ -18,8 +18,12 @@ if (app) {
 
   let state: EditorState = createEditorState("", "UNTITLED");
 
+  const MENU_REVEAL_MS = 800;
+  let menuTimer: ReturnType<typeof setTimeout> | null = null;
+  let revealMenu = false;
+
   const paint = () => {
-    app.innerHTML = renderEditor(state);
+    app.innerHTML = renderEditor(state, { revealMenu });
   };
 
   const wsUrl = `${window.location.origin.replace(/^http/, "ws")}/ws`;
@@ -46,7 +50,7 @@ if (app) {
     client.save(getText(state.document));
   });
 
-  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f"]);
+  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f", "j"]);
   const NAMED = new Set([
     "Enter",
     "Backspace",
@@ -71,6 +75,16 @@ if (app) {
 
     if (state.document !== prev.document) scheduleSave(); // content changed
     if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
+
+    if (menuTimer) { clearTimeout(menuTimer); menuTimer = null; }
+    revealMenu = false;
+    if (state.pending !== null) {
+      menuTimer = setTimeout(() => {
+        revealMenu = true;
+        paint();
+      }, MENU_REVEAL_MS);
+    }
+
     paint();
   });
 
