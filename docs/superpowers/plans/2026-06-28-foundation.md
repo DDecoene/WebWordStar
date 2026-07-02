@@ -1,5 +1,7 @@
 # Foundation Implementation Plan (v1.0.0 — Stage 1)
 
+> ✅ **Shipped** — merged into `release/v1.0.0` (PR #10, issue #4).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up the WebWordStar toolchain and the pure document model + shared type contracts that every later stage depends on.

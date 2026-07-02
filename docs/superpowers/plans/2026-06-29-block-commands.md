@@ -1,5 +1,7 @@
 # Block Commands Implementation Plan (v1.0.0 — Stage 2b)
 
+> ✅ **Shipped** — merged into `release/v1.0.0` (PR #12, part of issue #5). Block move `^KV` deferred.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add WordStar `^K` block operations to the editor: mark a block (`^KB`/`^KK`), copy it (`^KC`), delete it (`^KY`), hide/show the highlight (`^KH`), with the block region visibly highlighted on screen.

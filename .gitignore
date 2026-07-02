@@ -36,3 +36,7 @@ coverage/
 .idea/
 .DS_Store
 *.swp
+
+# Playwright output
+test-results/
+playwright-report/

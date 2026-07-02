@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** early planning stage, active development. Architecture and command tables below will fill in as the project takes shape.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, and always-saved persistence (WebSocket + SQLite). Remaining for v1.0.0: layout dot commands, print/export, real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -37,37 +37,94 @@ The flow is **`feature/*` → `release/vX.Y.Z` → `main`**. Branch protection e
 
 ```bash
 npm install
-npm run dev        # dev server; browser frontend + Node WS server
+npm run dev        # Vite on http://localhost:5273 + Node WS server on :5274 (Vite proxies /ws)
+npm run serve      # production: vite build, then the Node server serves assets + WS
 ```
 
-> Scripts are placeholders until the toolchain lands; update this section as `dev`/`build`/`serve` are implemented.
+The dev server uses a **dedicated port 5273** (`strictPort`) to avoid colliding with other
+Vite projects; the WS server is on **5274**. Open `http://localhost:5273` → redirected to
+`?doc=<uuid>`. Documents auto-save (no save command).
 
 ## Architecture
 
-_To be filled in as modules land. Anticipated shape:_
-
 ```
-server/        Node.js HTTP + WebSocket server; per-connection editing session
+server/
+  DocumentStore.ts     SQLite (better-sqlite3, WAL): documents(id, title, content, updated_at)
+  DocumentSession.ts   Per-connection: join (load/create), save(content), setTitle
+  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes messages
+  staticPath.ts        Path-traversal-safe static file resolver
+
 src/
-  editor/      WordStar editing core — diamond cursor, ^K block / ^Q quick / dot commands
-  terminal/    Browser terminal-aesthetic UI
-  collab/      Real-time collaboration (CRDT/OT) over WebSockets
-  ws/          Browser WebSocket client
-  shared/      Shared TS types (WS message shapes, document model)
-data/          SQLite document store
-tests/         Vitest + Playwright suites
+  shared/
+    types.ts           Shared types: Position, TextDocument, EditIntent, WS ClientMessage/ServerMessage
+    document.ts        Pure document model (createDocument/getText/insertText/deleteRange/
+                       splitLine/applyIntent/getRange/insertMultiline)
+  editor/
+    state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V,
+                       editing, prompt mode)
+    render.ts          EditorState -> HTML (status line, screen, block cursor, block highlight, prompt)
+  ws/
+    WsClient.ts        Browser WebSocket client (join/save/setTitle, buffering + backoff reconnect)
+  main.ts              Boot: URL/UUID, connect, adopt snapshot, debounced save, wire keydown
+  style.css            Terminal aesthetic (status bar, dark monospace screen, block cursor)
+
+data/                  SQLite file (gitignored)
+tests/                 Vitest (*.test.ts) + Playwright (*.spec.ts)
 ```
 
-## WordStar interface (target)
+**Data flow:** keystroke → `applyKey` (pure) → new `EditorState` → `renderEditor` repaints; if the
+`document` reference changed, `main.ts` schedules a debounced `save` (full content) over the socket;
+the server stores it. Documents are identified by a UUID in the URL; the title is set via `^KN`.
 
-The keyboard-first command set we are bringing forward:
+> **Persistence is latest-only and single-user for now.** The server stores full content (not
+> operations) — the complete operation protocol and multi-user broadcast arrive with collaboration.
 
-- **Diamond cursor** — `^E` up, `^X` down, `^S` left, `^D` right (word: `^A`/`^F`).
-- **`^K` block commands** — mark/move/copy/delete blocks, save, file ops.
-- **`^Q` quick commands** — quick navigation (line/screen/document ends, find).
-- **Dot commands** — `.`-prefixed formatting directives at column 1.
+## Implemented commands
 
-> Document the exact bindings here as they are implemented, with a Playwright case for each.
+Bindings are `Ctrl`+letter (faithful to WordStar). Arrow keys are modern alternates for movement.
+
+### Cursor movement (the diamond)
+| Keys | Move | Alt |
+|---|---|---|
+| `^E` / `^X` | Up / down a line | `↑` / `↓` |
+| `^S` / `^D` | Left / right a character | `←` / `→` |
+| `^A` / `^F` | Left / right a word | |
+
+### `^Q` quick movement
+| Keys | To |
+|---|---|
+| `^Q S` / `^Q D` | Start / end of line |
+| `^Q E` / `^Q X` | Top / bottom of screen |
+| `^Q R` / `^Q C` | Start / end of document |
+
+### `^K` block & document
+| Keys | Action |
+|---|---|
+| `^K B` / `^K K` | Mark block begin / end |
+| `^K C` / `^K Y` | Copy / delete block |
+| `^K H` | Hide / show block highlight |
+| `^K N` | Name the document (inline `DOCUMENT NAME:` prompt) |
+
+### Editing
+| Keys | Action |
+|---|---|
+| `^V` | Toggle insert / overtype |
+| `Enter` / `Backspace` / `^G` | Split line / delete left / delete right |
+
+## Roadmap
+
+Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 collaboration, #9 export):
+
+- [x] Foundation — model, types, toolchain, CI
+- [x] Editor core MVP — diamond, `^Q`, typing, insert/overtype, editing, terminal UI
+- [x] `^K` block commands + arrow-key alternates
+- [x] Persistence — always-saved over WebSocket + SQLite, UUID URLs, `^KN` title
+- [ ] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
+- [ ] Layout dot commands (#6)
+- [ ] Real-time collaboration (#8) — server-authoritative; introduces the operation protocol
+- [ ] Print/export (#9) — PDF / HTML / plain text / Markdown
+
+Deferred beyond v1.0.0: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip.
 
 ## Testing
 

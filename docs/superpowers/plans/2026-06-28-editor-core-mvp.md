@@ -1,5 +1,7 @@
 # Editor Core MVP Implementation Plan (v1.0.0 — Stage 2a)
 
+> ✅ **Shipped** — merged into `release/v1.0.0` (PR #11, part of issue #5).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A genuinely interactive WordStar editor in the browser: type text, move with the diamond and `^Q` quick commands, edit (split/backspace/delete), toggle insert/overtype, with a live status line and block cursor.
