@@ -842,3 +842,73 @@ describe("help level", () => {
     expect(s.prompt).toBeNull();
   });
 });
+
+describe("dot commands in editor", () => {
+  function ctrl(key: string) {
+    return { key, ctrl: true };
+  }
+
+  function typeString(s: ReturnType<typeof createEditorState>, str: string) {
+    for (const ch of str) s = applyKey(s, { key: ch, ctrl: false });
+    return s;
+  }
+
+  it("wraps typed text at the effective right margin set by a .rm dot line above", () => {
+    let s = createEditorState(".rm 20\n");
+    s.ruler.right; // sanity: base ruler.right is 65
+    s = { ...s, cursor: { line: 1, col: 0 } };
+    s = typeString(s, "a".repeat(30));
+    expect(s.ruler.right).toBe(65);
+    // Should have wrapped: line 1 should not exceed 21 chars (0..20 inclusive => width 21)
+    expect(s.document.lines[1]!.length).toBeLessThanOrEqual(21);
+    expect(s.document.lines.length).toBeGreaterThan(2);
+  });
+
+  it("does not wrap at 20 without the dot line present", () => {
+    let s = createEditorState("");
+    s = typeString(s, "a".repeat(30));
+    expect(s.document.lines[0]!.length).toBe(30);
+  });
+
+  it("typing on the dot line itself never wraps", () => {
+    let s = createEditorState("");
+    s = typeString(s, "." + "a".repeat(80));
+    expect(s.document.lines.length).toBe(1);
+    expect(s.document.lines[0]!.length).toBe(81);
+  });
+
+  it("^B reflows only the part of a paragraph before an embedded dot line, leaving it intact", () => {
+    const text = "word ".repeat(20).trim() + "\n.rm 30\nmore words here";
+    let s = createEditorState(text);
+    s = { ...s, cursor: { line: 0, col: 0 } };
+    s = applyKey(s, ctrl("b"));
+    // The dot line must remain untouched, on its own line.
+    const dotLineIndex = s.document.lines.findIndex((l) => l === ".rm 30");
+    expect(dotLineIndex).toBeGreaterThan(0);
+    // Nothing before the dot line should contain the dot line text merged in.
+    for (let i = 0; i < dotLineIndex; i++) {
+      expect(s.document.lines[i]).not.toContain(".rm 30");
+    }
+    // Line after dot line should be untouched (not reflowed into paragraph above).
+    expect(s.document.lines[dotLineIndex + 1]).toBe("more words here");
+  });
+
+  it("^B on a dot line is a no-op", () => {
+    let s = createEditorState(".rm 30\nsome text here");
+    s = { ...s, cursor: { line: 0, col: 3 } };
+    const before = s.document;
+    s = applyKey(s, ctrl("b"));
+    expect(s.document).toBe(before);
+  });
+
+  it("^OC centers per the effective margins set by a dot line above", () => {
+    let s = createEditorState(".rm 20\nhi");
+    s = { ...s, cursor: { line: 1, col: 0 } };
+    s = applyKey(s, ctrl("o"));
+    s = applyKey(s, { key: "c", ctrl: false });
+    const line = s.document.lines[1]!;
+    const col = line.indexOf("hi");
+    // width 0..20 => width 21; centered col = floor((21-2)/2) = 9
+    expect(col).toBe(9);
+  });
+});
