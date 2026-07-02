@@ -50,7 +50,7 @@ if (app) {
     client.save(getText(state.document));
   });
 
-  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f", "j"]);
+  const CTRL_COMMANDS = new Set(["q", "k", "v", "g", "e", "x", "s", "d", "a", "f", "j", "o", "p", "u", "b"]);
   const NAMED = new Set([
     "Enter",
     "Backspace",
@@ -64,7 +64,12 @@ if (app) {
   window.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
     const ctrl = e.ctrlKey && !e.altKey;
-    const isCtrlCommand = ctrl && CTRL_COMMANDS.has(e.key.toLowerCase());
+    // With a prefix pending, any ctrl+letter is a valid second key (classic WordStar
+    // accepts e.g. ^K^C); otherwise only the base command set claims ctrl keys.
+    const isCtrlCommand =
+      ctrl &&
+      (CTRL_COMMANDS.has(e.key.toLowerCase()) ||
+        (state.pending !== null && e.key.length === 1 && /[a-z]/i.test(e.key)));
     const isNamed = !ctrl && NAMED.has(e.key);
     const isPrintable = !ctrl && !e.altKey && !e.metaKey && e.key.length === 1;
     if (!isCtrlCommand && !isNamed && !isPrintable) return;
