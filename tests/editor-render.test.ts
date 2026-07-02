@@ -132,3 +132,38 @@ describe("print control rendering", () => {
     expect(html).toContain("a b");
   });
 });
+
+describe("ruler and flag column", () => {
+  it("renders a ruler row with L at left, R at right, and ! at tab stops", () => {
+    const s = createEditorState("hello");
+    const html = renderEditor(s);
+    expect(html).toContain('data-testid="ruler"');
+    const ruler = html.split('data-testid="ruler">')[1]!.split("</div>")[0]!;
+    expect(ruler[s.ruler.left]).toBe("L");
+    expect(ruler[s.ruler.right]).toBe("R");
+    for (const tab of s.ruler.tabs) {
+      expect(ruler[tab]).toBe("!");
+    }
+  });
+
+  it("does not render a ruler row when showRuler is false", () => {
+    const s = { ...createEditorState("hello"), ruler: { ...createEditorState("hello").ruler, showRuler: false } };
+    const html = renderEditor(s);
+    expect(html).not.toContain('data-testid="ruler"');
+  });
+
+  it("ends a hard-return line with a < flag", () => {
+    const s = { ...createEditorState("alpha\nbeta"), cursor: { line: 1, col: 4 } };
+    const html = renderEditor(s);
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).toContain('alpha<span class="flag">&lt;</span>');
+  });
+
+  it("ends a soft-return line with a blank flag", () => {
+    const s = { ...createEditorState("alpha\nbeta"), cursor: { line: 1, col: 4 } };
+    s.document.returns[0] = "soft";
+    const html = renderEditor(s);
+    const screen = html.split('data-testid="screen">')[1]!;
+    expect(screen).toContain('alpha<span class="flag"> </span>');
+  });
+});

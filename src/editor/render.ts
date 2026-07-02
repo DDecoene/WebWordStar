@@ -121,6 +121,18 @@ function renderLine(
   return cellsToHtml(cells);
 }
 
+/** Build the ruler row: L at ruler.left, R at ruler.right, ! at tab stops, - elsewhere. */
+function renderRuler(ruler: EditorState["ruler"]): string {
+  const cells: string[] = [];
+  for (let col = 0; col <= ruler.right; col++) {
+    if (col === ruler.left) cells.push("L");
+    else if (col === ruler.right) cells.push("R");
+    else if (ruler.tabs.includes(col)) cells.push("!");
+    else cells.push("-");
+  }
+  return escapeHtml(cells.join(""));
+}
+
 /** Render the full editor (status line + screen) to an HTML string. */
 export function renderEditor(state: EditorState): string {
   const { document, cursor, mode, filename } = state;
@@ -146,11 +158,21 @@ export function renderEditor(state: EditorState): string {
   const cursorLine = state.prompt ? -1 : cursor.line;
 
   const screen = document.lines
-    .map((text, i) => renderLine(text, i, cursorLine, cursor.col, block, state.showControls))
+    .map((text, i) => {
+      const lineHtml = renderLine(text, i, cursorLine, cursor.col, block, state.showControls);
+      const isHard = document.returns[i] === "hard";
+      const flagChar = escapeHtml(isHard ? "<" : " ");
+      return `${lineHtml}<span class="flag">${flagChar}</span>`;
+    })
     .join("\n");
+
+  const rulerHtml = state.ruler.showRuler
+    ? `<div class="ruler" data-testid="ruler">${renderRuler(state.ruler)}</div>`
+    : "";
 
   return (
     `<div class="status" data-testid="status">${statusHtml}</div>` +
+    rulerHtml +
     `<pre class="screen" data-testid="screen">${screen}</pre>`
   );
 }

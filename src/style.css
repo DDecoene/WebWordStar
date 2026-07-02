@@ -37,6 +37,19 @@ body {
   user-select: none;
 }
 
+/* Ruler row — column guide (L/R margins, ! tab stops), shown above the screen. */
+.ruler {
+  padding: 0 10px;
+  color: #6a737d;
+  white-space: pre;
+  user-select: none;
+}
+
+/* Flag column — trailing per-line marker, "<" for a hard return, blank for soft/wrapped. */
+.flag {
+  color: #6a737d;
+}
+
 /* The editing screen fills the rest of the viewport. */
 .screen {
   margin: 0;
