@@ -1,6 +1,8 @@
 import type { EditorState } from "./state";
-import { orderedBlock } from "./state";
+import { orderedBlock, effectiveRuler } from "./state";
 import { MENUS } from "./menus";
+import { isDotLine } from "../shared/dot";
+import { paginate } from "../shared/page";
 
 // NOTE: escapes only text-node characters (&, <, >). Does NOT escape quotes, so it must
 // NOT be used for HTML attribute values.
@@ -74,12 +76,14 @@ function renderLine(
   cursorCol: number,
   block: ReturnType<typeof orderedBlock>,
   showControls: boolean,
+  isDot: boolean,
 ): string {
   // One extra virtual cell at end-of-line so the block cursor has a cell to occupy.
   const length = text.length;
   const cells: { ch: string; cls: CellClass }[] = [];
   const activeStyles = new Set<string>();
   let pendingCursor = false; // cursor sat on a marker char that hidden mode skipped; land on next visible cell
+  const dotCls: CellClass = isDot ? "dot" : null;
 
   for (let col = 0; col <= length; col++) {
     const isVirtual = col === length;
@@ -92,7 +96,7 @@ function renderLine(
       const isCursor = isCursorHere || pendingCursor;
       const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
       pendingCursor = false;
-      cells.push({ ch: " ", cls: combineClasses(styleCls, blockCls, isCursor ? "cursor" : null) });
+      cells.push({ ch: " ", cls: combineClasses(styleCls, dotCls, blockCls, isCursor ? "cursor" : null) });
       continue;
     }
 
@@ -104,7 +108,7 @@ function renderLine(
         const isCursor = isCursorHere || pendingCursor;
         const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
         pendingCursor = false;
-        cells.push({ ch: meta.mnemonic, cls: combineClasses("ctrl", blockCls, isCursor ? "cursor" : null) });
+        cells.push({ ch: meta.mnemonic, cls: combineClasses("ctrl", dotCls, blockCls, isCursor ? "cursor" : null) });
       } else if (isCursorHere) {
         pendingCursor = true;
       }
@@ -114,7 +118,7 @@ function renderLine(
     const isCursor = isCursorHere || pendingCursor;
     const styleCls = activeStyles.size > 0 ? [...activeStyles].join(" ") : null;
     const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
-    const cls = combineClasses(styleCls, blockCls, isCursor ? "cursor" : null);
+    const cls = combineClasses(styleCls, dotCls, blockCls, isCursor ? "cursor" : null);
     if (isVirtual && !isCursor) continue; // don't emit trailing virtual cell unless it's the cursor
     pendingCursor = false;
     cells.push({ ch, cls });
@@ -155,6 +159,15 @@ export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } 
   const { document, cursor, mode, filename } = state;
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
 
+  const pagination = paginate(document, {
+    left: state.ruler.left,
+    right: state.ruler.right,
+    spacing: state.ruler.spacing,
+  });
+  const breakSet = new Set(pagination.breaks);
+  const currentPage = pagination.pageOfLine[cursor.line] ?? 0;
+  const pageNumber = pagination.pageNumbers[currentPage] ?? 1;
+
   // When a prompt is active, the status bar becomes an editable command line with
   // a visible block caret after the typed text. Otherwise it is the normal status line.
   let statusHtml: string;
@@ -164,7 +177,7 @@ export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } 
       `<span class="cursor"> </span>`;
   } else {
     statusHtml = escapeHtml(
-      `${filename}   PAGE 1 LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`,
+      `${filename}   PAGE ${pageNumber} LINE ${cursor.line + 1} COL ${cursor.col + 1}   ${modeLabel}`,
     );
   }
 
@@ -176,15 +189,26 @@ export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } 
 
   const screen = document.lines
     .map((text, i) => {
-      const lineHtml = renderLine(text, i, cursorLine, cursor.col, block, state.showControls);
+      const isDot = isDotLine(text);
+      const lineHtml = renderLine(text, i, cursorLine, cursor.col, block, state.showControls, isDot);
       const isHard = document.returns[i] === "hard";
-      const flagChar = escapeHtml(isHard ? "<" : " ");
-      return `${lineHtml}<span class="flag">${flagChar}</span>`;
+      const flagChar = escapeHtml(isDot ? "." : isHard ? "<" : " ");
+      const row = `${lineHtml}<span class="flag">${flagChar}</span>`;
+      if (breakSet.has(i)) {
+        const eff = effectiveRuler(state, i);
+        const width = eff.right + 1;
+        const dashes = escapeHtml("-".repeat(width));
+        const pageBreakRow =
+          `<span class="page-break" data-testid="page-break">${dashes}</span>` +
+          `<span class="flag">P</span>`;
+        return `${row}\n${pageBreakRow}`;
+      }
+      return row;
     })
     .join("\n");
 
   const rulerHtml = state.ruler.showRuler
-    ? `<div class="ruler" data-testid="ruler">${renderRuler(state.ruler)}</div>`
+    ? `<div class="ruler" data-testid="ruler">${renderRuler(effectiveRuler(state, cursor.line))}</div>`
     : "";
 
   const menuHtml = renderMenu(state, opts.revealMenu ?? false);
