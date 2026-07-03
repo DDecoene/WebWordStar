@@ -54,6 +54,27 @@ describe("exportPdf", () => {
     expect(buffer.subarray(0, 4).toString("latin1")).toBe("%PDF");
   });
 
+  it("a mid-page .ls change does not rescale earlier lines (regression)", async () => {
+    // With .ls 2 starting at line "bb", "bb" must sit one line slot below
+    // "aa" (12pt at pl 66), and "cc" two slots below "bb". The old y-math
+    // (slot count x current spacing) pushed "bb" and "cc" twice as far down.
+    const doc = createDocument("aa\n.ls 2\nbb\ncc");
+    const buffer = await exportPdf(doc, "Test");
+    const content = buffer.toString("latin1");
+    const stream = [...content.matchAll(/stream\r?\n([\s\S]*?)endstream/g)][0]![1]!;
+    // Pair each Tm y-coordinate with the hex text that follows it.
+    const ops = [...stream.matchAll(/1 0 0 1 [\d.]+ ([\d.]+) Tm\s*\n\/F\d+ [\d.]+ Tf\s*\n\[<([0-9a-f]+)>/g)];
+    const yOf = (text: string) => {
+      const hex = Buffer.from(text, "latin1").toString("hex");
+      return parseFloat(ops.find((m) => m[2] === hex)![1]!);
+    };
+    // Stream y is flipped (top-down drawing under a flipped cm), so higher
+    // on the page = larger value; assert relative gaps of 1 and 2 slots.
+    const lineHeight = 792 / 66;
+    expect(yOf("aa") - yOf("bb")).toBeCloseTo(lineHeight, 3);
+    expect(yOf("bb") - yOf("cc")).toBeCloseTo(2 * lineHeight, 3);
+  });
+
   it("includes text content in the PDF", async () => {
     const doc = createDocument("The quick brown fox");
     const buffer = await exportPdf(doc, "Test");

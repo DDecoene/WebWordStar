@@ -25,6 +25,9 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
   // Font constants
   const fontSize = 12;
   const charWidth = 7.2; // fontSize * 0.6 for Courier
+  // WordStar's default page offset (.po) was 8 columns of left margin at
+  // print time; without it, text sits glued to the paper's left edge.
+  const pageOffsetX = 8 * charWidth;
   const supersubFontSize = fontSize * 0.7;
   const supersubOffset = fontSize * 0.3;
 
@@ -64,19 +67,16 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
 
     // Track current page and per-line layout
     let currentPage = 0;
-    let lineInPage = 0;
     let currentPl = base.pageLen ?? 66;
     let currentMt = base.marginTop ?? 3;
-    let currentLs = base.spacing ?? 1;
 
     const lineHeight = pageHeight / currentPl;
 
-    // Compute y position for a line in the current page.
-    // mt lines = margin top, first text line baseline at y = mt * lineHeight.
-    // Line i (0-based line in page) has baseline at y = mt * lineHeight + i * currentLs * lineHeight.
-    const getLineY = (lineInPageArg: number): number => {
-      return currentMt * lineHeight + lineInPageArg * currentLs * lineHeight;
-    };
+    // Vertical position accumulates line by line (mirroring paginate's
+    // `used += ls`): each printed line advances by the spacing in effect FOR
+    // THAT LINE. Deriving y from a line count times the current spacing would
+    // retroactively rescale earlier lines whenever .ls changes mid-page.
+    let slotsUsed = 0;
 
     // Start the first page
     pdf.fontSize(fontSize).font("Courier");
@@ -89,7 +89,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
       // Check if we need a new page
       if (pageIdx > currentPage) {
         currentPage = pageIdx;
-        lineInPage = 0;
+        slotsUsed = 0;
         // Scan layout at this page's first line to get the effective settings
         const layoutAtPage = scanLayout(doc, i, base);
         currentPl = layoutAtPage.pageLen;
@@ -103,17 +103,14 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         continue;
       }
 
-      // Compute layout at this line
+      // Spacing in effect at this line
       const layout = scanLayout(doc, i, base);
-      currentLs = layout.spacing;
 
-      // Compute y position
-      const y = getLineY(lineInPage);
+      // Render the line at the accumulated offset, then consume ls slots
+      const y = (currentMt + slotsUsed) * lineHeight;
+      renderLine(pdf, line, pageOffsetX, y, fontSize, charWidth, supersubFontSize, supersubOffset);
 
-      // Render the line
-      renderLine(pdf, line, 0, y, fontSize, charWidth, supersubFontSize, supersubOffset);
-
-      lineInPage++;
+      slotsUsed += layout.spacing;
     }
 
     // Render headers and footers onto their own pages via switchToPage —
@@ -139,7 +136,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         pdf
           .fontSize(fontSize)
           .font("Courier")
-          .text(headerText, 0, headerY, { lineBreak: false });
+          .text(headerText, pageOffsetX, headerY, { lineBreak: false });
       }
 
       // Render footer if present, or page number
@@ -149,7 +146,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         pdf
           .fontSize(fontSize)
           .font("Courier")
-          .text(footerText, 0, footerY, { lineBreak: false });
+          .text(footerText, pageOffsetX, footerY, { lineBreak: false });
       } else if (!omitNum) {
         // Center page number
         const pageNumStr = pageNum.toString();
