@@ -47,12 +47,20 @@ The first release. Work integrates on `release/v1.0.0`.
   `.pl`/`.mt`/`.mb` (page length, top/bottom margin, defaults 66/3/8) override
   the `^O` ruler positionally, from that line down; `.pa` forces a page break,
   `.cp n` is a conditional page break, `.pn n` renumbers pages, `.op` omits
-  page numbers, and `.he`/`.fo` capture header/footer text for the future
-  exporter (#9). Full **on-screen pagination** (`src/shared/page.ts`) renders
+  page numbers, and `.he`/`.fo` capture header/footer text for the exporter. Full **on-screen pagination** (`src/shared/page.ts`) renders
   dashed page-break rows with a `P` flag and shows the real `PAGE` number in
   the status line. Dot lines render dimmed with a `.` flag, never wrap, and
   are excluded from `^B` reflow; word-wrap, centering, and reflow all use the
   effective (positional) margins.
+- **Export (PDF / HTML / Markdown / plain text)** — triggered via `^K P` prompt
+  (`PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown`), downloads the document in
+  the chosen format. Rendering honours embedded `^P` print-control characters
+  (bold/underline/italic/etc. styled in HTML and Markdown; PDF renders with
+  typographic conventions) and layout dot commands (margins, page length, page
+  breaks, conditional page breaks, and page numbering from `.pl`/`.mt`/`.mb`/
+  `.pa`/`.cp`/`.pn`/`.op`; headers/footers from `.he`/`.fo` in PDF only).
+  Server-side renderer (`src/shared/export.ts` + `server/pdf.ts`, pdfkit) and
+  HTTP GET endpoint `/export/<docId>.(pdf|html|txt|md)`.
 
 ### Fixed
 
