@@ -25,6 +25,9 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
   // Font constants
   const fontSize = 12;
   const charWidth = 7.2; // fontSize * 0.6 for Courier
+  // WordStar's default page offset (.po) was 8 columns of left margin at
+  // print time; without it, text sits glued to the paper's left edge.
+  const pageOffsetX = 8 * charWidth;
   const supersubFontSize = fontSize * 0.7;
   const supersubOffset = fontSize * 0.3;
 
@@ -105,7 +108,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
 
       // Render the line at the accumulated offset, then consume ls slots
       const y = (currentMt + slotsUsed) * lineHeight;
-      renderLine(pdf, line, 0, y, fontSize, charWidth, supersubFontSize, supersubOffset);
+      renderLine(pdf, line, pageOffsetX, y, fontSize, charWidth, supersubFontSize, supersubOffset);
 
       slotsUsed += layout.spacing;
     }
@@ -133,7 +136,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         pdf
           .fontSize(fontSize)
           .font("Courier")
-          .text(headerText, 0, headerY, { lineBreak: false });
+          .text(headerText, pageOffsetX, headerY, { lineBreak: false });
       }
 
       // Render footer if present, or page number
@@ -143,7 +146,7 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         pdf
           .fontSize(fontSize)
           .font("Courier")
-          .text(footerText, 0, footerY, { lineBreak: false });
+          .text(footerText, pageOffsetX, footerY, { lineBreak: false });
       } else if (!omitNum) {
         // Center page number
         const pageNumStr = pageNum.toString();
