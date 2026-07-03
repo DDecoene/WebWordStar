@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { openEditor } from "./e2e-helpers";
 
 test(".rm sets right margin and wraps subsequent text", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type(".rm 20");
@@ -20,7 +21,7 @@ test(".rm sets right margin and wraps subsequent text", async ({ page }) => {
 });
 
 test(".pa forces a page break and advances the status PAGE number", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
   const status = page.getByTestId("status");
 
@@ -35,7 +36,7 @@ test(".pa forces a page break and advances the status PAGE number", async ({ pag
 });
 
 test("dot command lines render with a dot flag and dot styling", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type(".rm 20");

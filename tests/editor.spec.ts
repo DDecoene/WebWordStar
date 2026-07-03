@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { openEditor } from "./e2e-helpers";
 
 test("type, navigate with the diamond, and see the status line update", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
   const status = page.getByTestId("status");
 
@@ -24,7 +25,7 @@ test("type, navigate with the diamond, and see the status line update", async ({
 });
 
 test("overtype mode: ^V toggles overtype, typing overwrites existing text", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
   const status = page.getByTestId("status");
 
