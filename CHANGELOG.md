@@ -64,6 +64,11 @@ The first release. Work integrates on `release/v1.0.0`.
 
 ### Fixed
 
+- HTML/Markdown export: the page-break `<hr>` now lands **between** the paragraphs a
+  `.pa` separates (it trailed the following paragraph), dot lines no longer leak a
+  join-space into the next paragraph, `^OC`-centered lines export as
+  `<p class="centered">` (text-align) instead of collapsed leading spaces, and
+  Markdown trims centering indent so it can't render as a code block.
 - Prevent a **path-traversal** vulnerability in the server's static file handler.
 - Keyboard handling: treat AltGr correctly, guard IME composition, let browser/OS
   shortcuts (`Ctrl+C`, etc.) pass through, and scope intercepted keys to real commands.

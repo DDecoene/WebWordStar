@@ -1,6 +1,24 @@
 import type { TextDocument } from "./types";
-import { isDotLine, parseDotLine, type BaseSettings } from "./dot";
+import { isDotLine, parseDotLine, scanLayout, type BaseSettings } from "./dot";
 import { paginate } from "./page";
+
+/** Editor ruler defaults (see createRuler in editor/state.ts). */
+const EXPORT_BASE: BaseSettings = { left: 0, right: 65, spacing: 1 };
+
+/**
+ * True when the line's leading spaces put its text exactly where ^O C would:
+ * left + floor((width - len) / 2) under the margins in effect at that line.
+ */
+function isCenteredLine(doc: TextDocument, lineIdx: number, line: string): boolean {
+  const leading = line.length - line.trimStart().length;
+  if (leading === 0) return false;
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return false;
+  const layout = scanLayout(doc, lineIdx, EXPORT_BASE);
+  const width = layout.right - layout.left + 1;
+  const col = Math.max(layout.left, layout.left + Math.floor((width - trimmed.length) / 2));
+  return leading === col && col > layout.left;
+}
 
 export interface Run {
   text: string;
@@ -163,8 +181,9 @@ export function exportMarkdown(doc: TextDocument): string {
         currentParagraph = [];
       }
     } else {
-      // Render the line with styles
-      const runs = parseRuns(line);
+      // Render the line with styles. Leading indent (e.g. ^OC centering) is
+      // trimmed: 4+ leading spaces would otherwise read as a Markdown code block.
+      const runs = parseRuns(line.trim());
       const styledLine = renderMarkdownRuns(runs);
       currentParagraph.push(styledLine);
 
@@ -227,96 +246,71 @@ function renderMarkdownRuns(runs: Run[]): string {
  * Each paragraph is a <p>...</p>. Empty paragraphs skipped.
  * Styles: <b>, <i>, <u>, <s>, <sup>, <sub>; doubleStrike renders as <b>.
  * Tags nested in a fixed order. All text is HTML-escaped (& < > ").
- * Page breaks from paginate() emit <hr class="page-break"> after paragraphs containing break lines.
+ * Page breaks from paginate() emit <hr class="page-break"> at the page turn.
+ * Single lines centered with ^O C render as <p class="centered">.
  */
 export function exportHtml(doc: TextDocument, title: string): string {
   // Escape title for HTML
   const escapedTitle = htmlEscape(title);
 
-  // Compute page breaks
-  const base: BaseSettings = { left: 0, right: 70, spacing: 1 };
-  const pagination = paginate(doc, base);
-  const breakLineIndices = new Set(pagination.breaks);
+  // Compute page breaks (indices of the LAST line of each page but the final one)
+  const pagination = paginate(doc, EXPORT_BASE);
 
-  // Build paragraphs, tracking which document line indices they span
-  const paragraphs: Array<{ html: string; lineIndices: Set<number> }> = [];
-  let currentParagraph: Array<{ text: string; lineIdx: number }> = [];
+  // Build paragraphs. Dot lines emit no content and never join a paragraph;
+  // they only drive pagination.
+  const paragraphs: Array<{ html: string; centered: boolean; minIdx: number; maxIdx: number }> = [];
+  let currentParagraph: Array<{ text: string; lineIdx: number; centered: boolean }> = [];
+
+  const flush = () => {
+    if (currentParagraph.length === 0) return;
+    const html = renderHtmlParagraph(currentParagraph.map((p) => p.text));
+    if (html.trim().length > 0) {
+      paragraphs.push({
+        html,
+        // A paragraph renders centered when it is a single ^OC-centered line.
+        centered: currentParagraph.length === 1 && currentParagraph[0]!.centered,
+        minIdx: currentParagraph[0]!.lineIdx,
+        maxIdx: currentParagraph[currentParagraph.length - 1]!.lineIdx,
+      });
+    }
+    currentParagraph = [];
+  };
 
   for (let i = 0; i < doc.lines.length; i++) {
     const line = doc.lines[i]!;
 
-    if (isDotLine(line)) {
-      // Dot lines contribute to pagination but don't emit content
-      currentParagraph.push({ text: "", lineIdx: i });
-      // Don't end paragraph; dot lines are "free"
+    if (isDotLine(line) || line.trim() === "") {
+      // Dot line or blank line: ends the current paragraph, emits nothing.
+      flush();
       continue;
     }
 
-    if (line.trim() === "") {
-      // Blank line ends paragraph
-      if (currentParagraph.length > 0) {
-        const lineIndices = currentParagraph
-          .filter((p) => p.text.trim().length > 0)
-          .map((p) => p.lineIdx);
-        if (lineIndices.length > 0) {
-          const html = renderHtmlParagraph(currentParagraph.map((p) => p.text));
-          if (html.trim().length > 0) {
-            paragraphs.push({ html, lineIndices: new Set(lineIndices) });
-          }
-        }
-        currentParagraph = [];
-      }
-    } else {
-      // Regular content line
-      const runs = parseRuns(line);
-      const styledLine = renderHtmlRuns(runs);
-      currentParagraph.push({ text: styledLine, lineIdx: i });
+    // Regular content line. Leading indent (e.g. ^OC centering) is trimmed:
+    // HTML collapses it anyway; centered lines get text-align instead.
+    const centered = isCenteredLine(doc, i, line);
+    const runs = parseRuns(line.trim());
+    currentParagraph.push({ text: renderHtmlRuns(runs), lineIdx: i, centered });
 
-      // Check if this line ends with a hard return (paragraph break)
-      if (doc.returns[i] === "hard") {
-        if (currentParagraph.length > 0) {
-          const lineIndices = currentParagraph
-            .filter((p) => p.text.trim().length > 0)
-            .map((p) => p.lineIdx);
-          if (lineIndices.length > 0) {
-            const html = renderHtmlParagraph(currentParagraph.map((p) => p.text));
-            if (html.trim().length > 0) {
-              paragraphs.push({ html, lineIndices: new Set(lineIndices) });
-            }
-          }
-          currentParagraph = [];
-        }
-      }
-    }
+    // A hard return ends the paragraph.
+    if (doc.returns[i] === "hard") flush();
   }
+  flush();
 
-  // Flush any remaining paragraph
-  if (currentParagraph.length > 0) {
-    const lineIndices = currentParagraph
-      .filter((p) => p.text.trim().length > 0)
-      .map((p) => p.lineIdx);
-    if (lineIndices.length > 0) {
-      const html = renderHtmlParagraph(currentParagraph.map((p) => p.text));
-      if (html.trim().length > 0) {
-        paragraphs.push({ html, lineIndices: new Set(lineIndices) });
-      }
-    }
-  }
-
-  // Build body: emit paragraphs and page breaks
+  // Build body: an <hr class="page-break"> goes where the page turns — before a
+  // paragraph that starts past a break, or after one that contains the break.
   const bodyParts: string[] = [];
-  let lastBreakEmittedAfter = -1;
+  const breaks = [...pagination.breaks].sort((a, b) => a - b);
+  let nextBreak = 0;
 
-  for (const { html, lineIndices } of paragraphs) {
-    bodyParts.push(`<p>${html}</p>`);
-
-    // Check if any break index falls within this paragraph's lines
-    const maxLineIdx = Math.max(...lineIndices);
-    for (const breakIdx of breakLineIndices) {
-      if (breakIdx <= maxLineIdx && breakIdx > lastBreakEmittedAfter) {
-        bodyParts.push('<hr class="page-break">');
-        lastBreakEmittedAfter = breakIdx;
-      }
+  for (const { html, centered, minIdx, maxIdx } of paragraphs) {
+    while (nextBreak < breaks.length && breaks[nextBreak]! < minIdx) {
+      bodyParts.push('<hr class="page-break">');
+      nextBreak++;
+    }
+    bodyParts.push(centered ? `<p class="centered">${html}</p>` : `<p>${html}</p>`);
+    while (nextBreak < breaks.length && breaks[nextBreak]! <= maxIdx) {
+      bodyParts.push('<hr class="page-break">');
+      nextBreak++;
     }
   }
 
@@ -326,6 +320,9 @@ export function exportHtml(doc: TextDocument, title: string): string {
     .page-break {
       border: none;
       border-top: 1px dashed #999;
+    }
+    .centered {
+      text-align: center;
     }
     @media print {
       .page-break {
