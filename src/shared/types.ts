@@ -17,9 +17,10 @@ export interface TextDocument {
 
 /** Edit intents: what a client asks the server to do. Pure data. */
 export type EditIntent =
-  | { kind: "insertText"; at: Position; text: string }
+  | { kind: "insertText"; at: Position; text: string } // text may contain \n (hard returns)
   | { kind: "deleteRange"; start: Position; end: Position }
-  | { kind: "splitLine"; at: Position };
+  | { kind: "splitLine"; at: Position; break?: "hard" | "soft" } // default hard
+  | { kind: "setReturn"; line: number; return: "hard" | "soft" };
 
 /** An applied, ordered mutation broadcast by the server authority. */
 export interface AppliedOp {
