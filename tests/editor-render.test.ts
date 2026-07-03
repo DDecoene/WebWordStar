@@ -43,6 +43,57 @@ describe("renderEditor", () => {
   });
 });
 
+describe("dot command rendering", () => {
+  it("uses . as the flag for a dot-command line", () => {
+    const s = createEditorState(".lm 5");
+    const html = renderEditor(s);
+    expect(html).toContain('<span class="flag">.</span>');
+  });
+
+  it("dims every cell of a dot-command line with the dot class", () => {
+    const s = { ...createEditorState(".lm 5\nhello"), cursor: { line: 1, col: 0 } };
+    const html = renderEditor(s);
+    expect(html).toContain('<span class="dot">.lm 5</span>');
+  });
+
+  it("renders a page-break row after a page break", () => {
+    const lines = [".pa"];
+    for (let i = 0; i < 70; i++) lines.push(`line ${i}`);
+    const s = createEditorState(lines.join("\n"));
+    const html = renderEditor(s);
+    expect(html).toContain('data-testid="page-break"');
+    expect(html).toContain('class="page-break"');
+  });
+
+  it("shows PAGE 2 in the status line when the cursor is below a page break", () => {
+    const lines = [".pa"];
+    for (let i = 0; i < 70; i++) lines.push(`line ${i}`);
+    const s = { ...createEditorState(lines.join("\n")), cursor: { line: 2, col: 0 } };
+    const html = renderEditor(s);
+    const status = html.split('data-testid="status">')[1]!.split("</div>")[0]!;
+    expect(status).toContain("PAGE 2");
+  });
+
+  it("honors .pn to show a custom page number on the second page", () => {
+    const lines = [".pa", ".pn 5"];
+    for (let i = 0; i < 70; i++) lines.push(`line ${i}`);
+    const s = { ...createEditorState(lines.join("\n")), cursor: { line: 3, col: 0 } };
+    const html = renderEditor(s);
+    const status = html.split('data-testid="status">')[1]!.split("</div>")[0]!;
+    expect(status).toContain("PAGE 5");
+  });
+
+  it("places the ruler R at the margin set by an .rm above the cursor", () => {
+    const s = {
+      ...createEditorState(".rm 40\nhello"),
+      cursor: { line: 1, col: 0 },
+    };
+    const html = renderEditor(s);
+    const ruler = html.split('data-testid="ruler">')[1]!.split("</div>")[0]!;
+    expect(ruler[39]).toBe("R");
+  });
+});
+
 describe("prompt rendering", () => {
   it("shows the prompt label and buffer in the status area when a prompt is active", () => {
     const s = { ...createEditorState("body", "UNTITLED"), prompt: { label: "DOCUMENT NAME:", buffer: "My Doc", target: "filename" as const } };

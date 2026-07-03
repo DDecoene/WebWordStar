@@ -65,6 +65,7 @@ export function reflowParagraph(
   fromLine: number,
   ruler: WrapRuler,
   track: Position,
+  endLineClamp?: number,
 ): { document: TextDocument; position: Position } {
   const { left, right, justify } = ruler;
 
@@ -72,6 +73,7 @@ export function reflowParagraph(
   let endLine = fromLine;
   while (endLine < doc.lines.length - 1 && doc.returns[endLine] !== "hard") endLine++;
   // endLine's return is "hard" (or it's the last line of the document).
+  if (endLineClamp !== undefined && endLineClamp < endLine) endLine = Math.max(fromLine, endLineClamp);
 
   const pieces = doc.lines.slice(fromLine, endLine + 1);
 

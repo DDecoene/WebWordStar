@@ -41,6 +41,18 @@ The first release. Work integrates on `release/v1.0.0`.
   for the `^Q`/`^K`/`^O`/`^P`/`^J` prefixes with **help levels** 0–3 via `^J H`
   (default 3); **multi-level undo/redo** (`^U` undo, `^Q U` redo, chunked by typing
   run, 200 levels); and **block move** (`^K V`).
+- **Layout dot commands** — lines starting with `.` are parsed as dot commands
+  (`src/shared/dot.ts`) and folded top-down into an effective layout
+  (`scanLayout`): `.lm`/`.rm`/`.ls` (left/right margin, line spacing) and
+  `.pl`/`.mt`/`.mb` (page length, top/bottom margin, defaults 66/3/8) override
+  the `^O` ruler positionally, from that line down; `.pa` forces a page break,
+  `.cp n` is a conditional page break, `.pn n` renumbers pages, `.op` omits
+  page numbers, and `.he`/`.fo` capture header/footer text for the future
+  exporter (#9). Full **on-screen pagination** (`src/shared/page.ts`) renders
+  dashed page-break rows with a `P` flag and shows the real `PAGE` number in
+  the status line. Dot lines render dimmed with a `.` flag, never wrap, and
+  are excluded from `^B` reflow; word-wrap, centering, and reflow all use the
+  effective (positional) margins.
 
 ### Fixed
 

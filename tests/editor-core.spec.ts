@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { openEditor } from "./e2e-helpers";
 
 test("word wrap and ^B reflow honor the right margin", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   // ^O R -> set a narrow right margin
@@ -36,7 +37,7 @@ test("word wrap and ^B reflow honor the right margin", async ({ page }) => {
 });
 
 test("^O C centers a line and ^O T toggles the ruler", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
   const ruler = page.getByTestId("ruler");
 
@@ -62,7 +63,7 @@ test("^O C centers a line and ^O T toggles the ruler", async ({ page }) => {
 });
 
 test("^P bold wraps text in a styled span with visible control markers, hideable via ^O D", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type("hello ");
@@ -84,7 +85,7 @@ test("^P bold wraps text in a styled span with visible control markers, hideable
 });
 
 test("self-revealing menus appear after a delay and respect the help level", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const menu = page.getByTestId("menu");
 
   await expect(menu).toHaveCount(0);
@@ -109,7 +110,7 @@ test("self-revealing menus appear after a delay and respect the help level", asy
 });
 
 test("^U undoes a typing run and ^Q U redoes it", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type("hello");
@@ -124,7 +125,7 @@ test("^U undoes a typing run and ^Q U redoes it", async ({ page }) => {
 });
 
 test("^K V moves a marked block to the cursor position", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type("abc def");

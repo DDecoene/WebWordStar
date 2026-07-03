@@ -20,9 +20,11 @@ forward, running natively in the browser.
 core (diamond, `^Q`, `^K` block commands, arrow-key alternates, editing), the editor
 core remainder — word wrap and `^B` reflow, a ruler line and flag column, the full
 `^O` onscreen-format menu, `^P` print controls with styled rendering, self-revealing
-menus, help levels, and multi-level undo/redo — plus always-saved persistence. Still
-to come in v1.0.0: layout dot commands, print/export, and real-time collaboration.
-See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
+menus, help levels, and multi-level undo/redo — plus always-saved persistence, and
+**layout dot commands** with full on-screen pagination (dashed page-break rows, a
+real `PAGE` number in the status line). Still to come in v1.0.0: print/export and
+real-time collaboration. See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Running it
 
@@ -119,6 +121,26 @@ provided as a modern alternative for cursor movement.
 | Keys | Action |
 |---|---|
 | `^J H` | Cycle help level (0–3, default 3) |
+
+### Dot commands
+
+Lines starting with `.` are layout dot commands; they render dimmed with a `.` flag,
+never wrap, and position-override the `^O` ruler from that line down.
+
+| Command | Effect |
+|---|---|
+| `.lm n` | Set left margin to column `n` |
+| `.rm n` | Set right margin to column `n` |
+| `.ls n` | Set line spacing |
+| `.pl n` | Set page length (default 66) |
+| `.mt n` | Set top margin (default 3) |
+| `.mb n` | Set bottom margin (default 8) |
+| `.pa` | Force a page break |
+| `.cp n` | Conditional page break if fewer than `n` lines remain |
+| `.pn n` | Renumber the page |
+| `.op` | Omit page numbers |
+| `.he text` | Set header text (used by the exporter) |
+| `.fo text` | Set footer text (used by the exporter) |
 
 ## Architecture
 

@@ -50,6 +50,16 @@ body {
   color: #6a737d;
 }
 
+/* Dot-command line — dimmed like the flag column, since it's layout markup, not text. */
+.dot {
+  color: #6a737d;
+}
+
+/* Page-break row — dimmed dashes inserted between rendered lines at a page boundary. */
+.page-break {
+  color: #6a737d;
+}
+
 /* The editing screen fills the rest of the viewport. */
 .screen {
   margin: 0;

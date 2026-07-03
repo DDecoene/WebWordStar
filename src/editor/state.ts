@@ -1,6 +1,7 @@
 import type { Position, TextDocument } from "../shared/types";
 import { createDocument, insertText, deleteRange, splitLine, getRange, insertMultiline } from "../shared/document";
 import { displayWidth, wrapPoint, reflowParagraph } from "../shared/wrap";
+import { isDotLine, scanLayout } from "../shared/dot";
 
 export type EditorMode = "insert" | "overtype";
 export type Pending = null | "quick" | "block" | "onscreen" | "print" | "help"; // ^Q quick, ^K block, ^O onscreen format, ^P print controls, ^J help
@@ -73,6 +74,14 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     tempIndent: null,
     helpLevel: 3,
   };
+}
+
+/** Ruler with left/right/spacing positionally overridden by dot commands above `line`. */
+export function effectiveRuler(state: EditorState, line: number): Ruler {
+  const layout = scanLayout(state.document, line, {
+    left: state.ruler.left, right: state.ruler.right, spacing: state.ruler.spacing,
+  });
+  return { ...state.ruler, left: layout.left, right: layout.right, spacing: layout.spacing };
 }
 
 /** Seal the current undo chunk (movement, mode toggle, prefixes): just clear the coalescing marker. */
@@ -249,9 +258,11 @@ function typeChar(state: EditorState, ch: string): EditorState {
   if (!next.ruler.wordWrap || next.marginRelease) return next;
 
   const line = doc.lines[newCursor.line] ?? "";
-  if (displayWidth(line) <= next.ruler.right + 1) return next;
+  if (isDotLine(line)) return next;
+  const eff = effectiveRuler(next, newCursor.line);
+  if (displayWidth(line) <= eff.right + 1) return next;
 
-  const breakAt = wrapPoint(line, next.ruler.right, next.ruler.left);
+  const breakAt = wrapPoint(line, eff.right, eff.left);
   if (breakAt === null) return next;
 
   const wasInSpill = newCursor.col > breakAt;
@@ -268,7 +279,7 @@ function typeChar(state: EditorState, ch: string): EditorState {
       { line: newCursor.line, col: breakAt },
     );
   }
-  const indent = " ".repeat(next.tempIndent ?? next.ruler.left);
+  const indent = " ".repeat(next.tempIndent ?? eff.left);
   const spilled = (wrappedDoc.lines[newCursor.line + 1] ?? "").replace(/^ +/, "");
   wrappedDoc = deleteRange(
     wrappedDoc,
@@ -284,22 +295,41 @@ function typeChar(state: EditorState, ch: string): EditorState {
   return { ...next, document: wrappedDoc, cursor: wrappedCursor };
 }
 
-/** Find the start of the paragraph containing `line` (scan back past soft breaks). */
+/** Find the start of the paragraph containing `line` (scan back past soft breaks, never past a dot line). */
 function paragraphStart(doc: TextDocument, line: number): number {
   let start = line;
-  while (start > 0 && doc.returns[start - 1] === "soft") start--;
+  while (
+    start > 0 &&
+    doc.returns[start - 1] === "soft" &&
+    !isDotLine(doc.lines[start - 1] ?? "")
+  )
+    start--;
   return start;
 }
 
 function reflowParagraphAt(state: EditorState): EditorState {
+  const { document, cursor } = state;
+  if (isDotLine(document.lines[cursor.line] ?? "")) return state;
+
   const withHistory = remember(state, null);
-  const { document, cursor, ruler } = withHistory;
-  const fromLine = paragraphStart(document, cursor.line);
+  const fromLine = paragraphStart(withHistory.document, cursor.line);
+  const eff = effectiveRuler(withHistory, fromLine);
+
+  // Clamp the reflow range so it never crosses an embedded dot line.
+  let endLine = fromLine;
+  while (
+    endLine < withHistory.document.lines.length - 1 &&
+    withHistory.document.returns[endLine] !== "hard" &&
+    !isDotLine(withHistory.document.lines[endLine + 1] ?? "")
+  )
+    endLine++;
+
   const { document: reflowed, position } = reflowParagraph(
-    document,
+    withHistory.document,
     fromLine,
-    { left: ruler.left, right: ruler.right, justify: ruler.justify },
+    { left: eff.left, right: eff.right, justify: eff.justify },
     cursor,
+    endLine,
   );
   return sealChunk({ ...withHistory, document: reflowed, cursor: position });
 }
@@ -499,7 +529,8 @@ function resolveHelp(state: EditorState, key: string): EditorState {
 }
 
 function centerLine(state: EditorState): EditorState {
-  const { document, cursor, ruler } = state;
+  const { document, cursor } = state;
+  const ruler = effectiveRuler(state, cursor.line);
   const line = document.lines[cursor.line] ?? "";
   const trimmed = line.trim();
   if (trimmed.length === 0) return state;

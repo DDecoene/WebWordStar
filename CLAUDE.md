@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), and the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move. Remaining for v1.0.0: layout dot commands, print/export, real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — and layout dot commands with full on-screen pagination. Remaining for v1.0.0: print/export, real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -60,6 +60,9 @@ src/
     document.ts        Pure document model (createDocument/getText/insertText/deleteRange/
                        splitLine/applyIntent/getRange/insertMultiline, hard/soft return flags)
     wrap.ts            Word-wrap and ^B paragraph reflow/justification helpers
+    dot.ts             Dot-command parser + scanLayout (positional .lm/.rm/.ls/.pl/.mt/.mb/
+                       .pa/.cp/.pn/.op/.he/.fo fold-down)
+    page.ts            paginate: on-screen page breaks + real page numbers from the layout
   editor/
     state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V, ^O, ^P,
                        ^J, editing, prompt mode, undo/redo history)
@@ -145,6 +148,24 @@ Bindings are `Ctrl`+letter (faithful to WordStar). Arrow keys are modern alterna
 |---|---|
 | `^J H` | Cycle help level (0–3, default 3) |
 
+### Dot commands
+Lines starting with `.` are layout dot commands; they render dimmed with a `.` flag, never wrap, and position-override the `^O` ruler from that line down (parsed/folded in `src/shared/dot.ts`).
+
+| Command | Effect |
+|---|---|
+| `.lm n` | Set left margin to column `n` |
+| `.rm n` | Set right margin to column `n` |
+| `.ls n` | Set line spacing |
+| `.pl n` | Set page length (default 66) |
+| `.mt n` | Set top margin (default 3) |
+| `.mb n` | Set bottom margin (default 8) |
+| `.pa` | Force a page break |
+| `.cp n` | Conditional page break if fewer than `n` lines remain |
+| `.pn n` | Renumber the page |
+| `.op` | Omit page numbers |
+| `.he text` | Set header text (used by the exporter) |
+| `.fo text` | Set footer text (used by the exporter) |
+
 ## Roadmap
 
 Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 collaboration, #9 export):
@@ -154,7 +175,7 @@ Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 
 - [x] `^K` block commands + arrow-key alternates
 - [x] Persistence — always-saved over WebSocket + SQLite, UUID URLs, `^KN` title
 - [x] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
-- [ ] Layout dot commands (#6)
+- [x] Layout dot commands (#6) — `.lm`/`.rm`/`.ls`/`.pl`/`.mt`/`.mb`/`.pa`/`.cp`/`.pn`/`.op`/`.he`/`.fo`, full on-screen pagination
 - [ ] Real-time collaboration (#8) — server-authoritative; introduces the operation protocol
 - [ ] Print/export (#9) — PDF / HTML / plain text / Markdown
 

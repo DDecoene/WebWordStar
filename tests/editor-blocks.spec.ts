@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { openEditor } from "./e2e-helpers";
 
 test("mark a block, copy it to end of line, and see it duplicated", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type("abc");
@@ -23,7 +24,7 @@ test("mark a block, copy it to end of line, and see it duplicated", async ({ pag
 });
 
 test("mark a block and delete it", async ({ page }) => {
-  await page.goto("/");
+  await openEditor(page);
   const screen = page.getByTestId("screen");
 
   await page.keyboard.type("hello");
