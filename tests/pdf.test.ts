@@ -75,6 +75,18 @@ describe("exportPdf", () => {
     expect(yOf("bb") - yOf("cc")).toBeCloseTo(2 * lineHeight, 3);
   });
 
+  it("a .he/.fo declared at the top of the document appears on page 1 (regression)", async () => {
+    // scanLayout folds strictly-before; scanning at the page's first line
+    // missed headers declared on that page's own leading dot lines.
+    const doc = createDocument(".he Top #\n.fo Bottom\nbody text");
+    const buffer = await exportPdf(doc, "Test");
+    const content = buffer.toString("latin1");
+    const firstStream = [...content.matchAll(/stream\r?\n([\s\S]*?)endstream/g)][0]![1]!;
+    const hex = (s: string) => Buffer.from(s, "latin1").toString("hex");
+    expect(firstStream).toContain(hex("Top 1"));
+    expect(firstStream).toContain(hex("Bottom"));
+  });
+
   it("includes text content in the PDF", async () => {
     const doc = createDocument("The quick brown fox");
     const buffer = await exportPdf(doc, "Test");
