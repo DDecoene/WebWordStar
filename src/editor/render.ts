@@ -1,4 +1,5 @@
 import type { EditorState } from "./state";
+import type { Peer } from "../shared/types";
 import { orderedBlock, effectiveRuler } from "./state";
 import { MENUS } from "./menus";
 import { isDotLine } from "../shared/dot";
@@ -35,15 +36,21 @@ function combineClasses(...classes: (string | null)[]): CellClass {
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
-/** Coalesce consecutive cells with the same class into spans; null runs are raw escaped text. */
-function cellsToHtml(cells: { ch: string; cls: CellClass }[]): string {
+/** Coalesce consecutive cells with the same class into spans; null runs are raw escaped text.
+ *  Cells carrying extra attributes (peer cursors) are emitted individually. */
+function cellsToHtml(cells: { ch: string; cls: CellClass; attrs?: string }[]): string {
   let out = "";
   let i = 0;
   while (i < cells.length) {
+    if (cells[i]!.attrs) {
+      out += `<span class="${cells[i]!.cls}"${cells[i]!.attrs}>${escapeHtml(cells[i]!.ch)}</span>`;
+      i++;
+      continue;
+    }
     const cls = cells[i]!.cls;
     let j = i;
     let chunk = "";
-    while (j < cells.length && cells[j]!.cls === cls) {
+    while (j < cells.length && cells[j]!.cls === cls && !cells[j]!.attrs) {
       chunk += cells[j]!.ch;
       j++;
     }
@@ -52,6 +59,11 @@ function cellsToHtml(cells: { ch: string; cls: CellClass }[]): string {
     i = j;
   }
   return out;
+}
+
+/** Sanitize a string for use inside a double-quoted HTML attribute. */
+function attrSafe(s: string): string {
+  return s.replace(/[^ -~]/g, "").replace(/["&<>]/g, "");
 }
 
 /** Is column `col` on `line` inside the ordered block [start, end)? Multi-line blocks
@@ -77,10 +89,11 @@ function renderLine(
   block: ReturnType<typeof orderedBlock>,
   showControls: boolean,
   isDot: boolean,
+  peerAt?: Map<number, Peer>,
 ): string {
   // One extra virtual cell at end-of-line so the block cursor has a cell to occupy.
   const length = text.length;
-  const cells: { ch: string; cls: CellClass }[] = [];
+  const cells: { ch: string; cls: CellClass; attrs?: string }[] = [];
   const activeStyles = new Set<string>();
   let pendingCursor = false; // cursor sat on a marker char that hidden mode skipped; land on next visible cell
   const dotCls: CellClass = isDot ? "dot" : null;
@@ -118,10 +131,20 @@ function renderLine(
     const isCursor = isCursorHere || pendingCursor;
     const styleCls = activeStyles.size > 0 ? [...activeStyles].join(" ") : null;
     const blockCls = !isCursor && inBlock(block, line, col, length) ? "block" : null;
-    const cls = combineClasses(styleCls, dotCls, blockCls, isCursor ? "cursor" : null);
-    if (isVirtual && !isCursor) continue; // don't emit trailing virtual cell unless it's the cursor
+    const peer = !isCursor ? peerAt?.get(col) : undefined;
+    const cls = combineClasses(styleCls, dotCls, blockCls, isCursor ? "cursor" : null, peer ? "peer-cursor" : null);
+    // Don't emit the trailing virtual cell unless a cursor (local or peer) occupies it.
+    if (isVirtual && !isCursor && !peer) continue;
     pendingCursor = false;
-    cells.push({ ch, cls });
+    if (peer) {
+      cells.push({
+        ch,
+        cls,
+        attrs: ` style="--peer-color:${attrSafe(peer.color)}" data-peer="${attrSafe(peer.name)}"`,
+      });
+    } else {
+      cells.push({ ch, cls });
+    }
   }
   return cellsToHtml(cells);
 }
@@ -155,8 +178,24 @@ function renderMenu(state: EditorState, revealMenu: boolean): string {
 }
 
 /** Render the full editor (status line + screen) to an HTML string. */
-export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } = {}): string {
+export function renderEditor(
+  state: EditorState,
+  opts: { revealMenu?: boolean; peers?: Peer[] } = {},
+): string {
   const { document, cursor, mode, filename } = state;
+
+  // Peer block cursors, keyed line -> col -> peer (cols clamped to the line end cell).
+  const peersByLine = new Map<number, Map<number, Peer>>();
+  for (const peer of opts.peers ?? []) {
+    if (!peer.cursor || peer.cursor.line < 0 || peer.cursor.line >= document.lines.length) continue;
+    const col = Math.min(peer.cursor.col, (document.lines[peer.cursor.line] ?? "").length);
+    let byCol = peersByLine.get(peer.cursor.line);
+    if (!byCol) {
+      byCol = new Map();
+      peersByLine.set(peer.cursor.line, byCol);
+    }
+    byCol.set(col, peer);
+  }
   const modeLabel = mode === "insert" ? "INSERT" : "OVERTYPE";
 
   const pagination = paginate(document, {
@@ -190,7 +229,7 @@ export function renderEditor(state: EditorState, opts: { revealMenu?: boolean } 
   const screen = document.lines
     .map((text, i) => {
       const isDot = isDotLine(text);
-      const lineHtml = renderLine(text, i, cursorLine, cursor.col, block, state.showControls, isDot);
+      const lineHtml = renderLine(text, i, cursorLine, cursor.col, block, state.showControls, isDot, peersByLine.get(i));
       const isHard = document.returns[i] === "hard";
       const flagChar = escapeHtml(isDot ? "." : isHard ? "<" : " ");
       const row = `${lineHtml}<span class="flag">${flagChar}</span>`;

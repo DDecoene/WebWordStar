@@ -245,3 +245,31 @@ describe("self-revealing menus", () => {
     expect(html).not.toContain('data-testid="menu"');
   });
 });
+
+describe("peer cursors (presence)", () => {
+  it("renders a peer block cursor with color and name tag", () => {
+    const state = createEditorState("hello");
+    const html = renderEditor(state, {
+      peers: [{ id: "p1", name: "USER 2", color: "#33ff33", cursor: { line: 0, col: 2 } }],
+    });
+    expect(html).toContain('class="peer-cursor"');
+    expect(html).toContain("--peer-color:#33ff33");
+    expect(html).toContain('data-peer="USER 2"');
+  });
+
+  it("clamps a peer cursor beyond the line end to the end cell", () => {
+    const state = createEditorState("ab");
+    const html = renderEditor(state, {
+      peers: [{ id: "p1", name: "USER 2", color: "#33ff33", cursor: { line: 0, col: 99 } }],
+    });
+    expect(html).toContain('class="peer-cursor"');
+  });
+
+  it("renders no peer cursor for peers without a position", () => {
+    const state = createEditorState("ab");
+    const html = renderEditor(state, {
+      peers: [{ id: "p1", name: "USER 2", color: "#33ff33", cursor: null }],
+    });
+    expect(html).not.toContain("peer-cursor");
+  });
+});
