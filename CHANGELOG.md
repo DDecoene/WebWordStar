@@ -73,6 +73,23 @@ The first release. Work integrates on `release/v1.0.0`.
   `0x8D` soft returns converted to newlines, soft hyphens dropped, our own print-control
   characters preserved); WordStar 5+/binary files are rejected with a `400`. The `^K`
   menu gained "R read (import) file".
+- **Real-time collaboration (server-authoritative)** — multiple browsers on the same
+  `?doc=` URL edit together live. The keystroke reducer emits **edit intents**
+  (insert/delete/split/set-return) alongside each new state; the client applies them
+  optimistically and sends them with a `baseRevision`; the server (`DocumentSession`
+  authority + `SessionManager` fan-out) serializes intents per document, **transforms
+  stale positions** past other clients' intervening ops (`src/shared/transform.ts` —
+  positional transform, not full OT; ties resolve in server order), assigns monotonic
+  **revision numbers**, persists (debounced, flushed when the last client leaves), and
+  broadcasts applied ops to every connection. Clients reconcile: own echoes confirm
+  optimistic edits; peer ops are transformed past unconfirmed local edits and applied,
+  shifting the cursor, block marks, and undo history. **Presence**: each connection is
+  assigned `USER n` and a color; peer cursors render as colored block cursors with a
+  floating name tag, updated from throttled cursor reports. **Undo is scoped to your
+  own edits** (`^U`/`^Q U` operate on an intent log with inverses — a peer's text is
+  never reverted by your undo). Any revision gap, rejected intent, or reconnect
+  triggers a snapshot **resync** (server wins). The full-content `save` message is
+  retired; persistence now flows through applied ops.
 
 ### Fixed
 

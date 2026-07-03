@@ -100,11 +100,13 @@ Each component has one purpose, a defined interface, and is independently testab
 ### 4.4 WS client (client)
 - Connects, sends edit intents, receives applied ops + presence, exposes them to the interpreter/renderer. Reconnect handling.
 - *Depends on:* shared WS message types.
+- **Status:** implemented (2026-07-03) — see `docs/superpowers/specs/2026-07-03-collaboration-design.md`.
 
 ### 4.5 DocumentSession + SessionManager (server)
 - `DocumentSession`: the authority for one open document — serialize intents, apply to the model, assign revisions, persist, broadcast.
 - `SessionManager`: tracks connections, maps clients ↔ documents, fans out ops and presence.
 - *Depends on:* document model, SQLite store, WS message types.
+- **Status:** implemented (2026-07-03) — see `docs/superpowers/specs/2026-07-03-collaboration-design.md`.
 
 ### 4.6 SQLite store (server)
 - Persists documents (the structured model, serialized), a **version/history log**, and supports autosave. WAL mode. No `.BAK` files; history replaces them.
