@@ -186,6 +186,12 @@ describe("exportText", () => {
 });
 
 describe("exportMarkdown", () => {
+  it("trims centered-line indent so it cannot become a Markdown code block", () => {
+    const doc = createDocument(" ".repeat(28) + "center me");
+    const md = exportMarkdown(doc);
+    expect(md).toBe("center me\n");
+  });
+
   it("exports simple paragraphs", () => {
     const doc = createDocument("line1\nline2");
     const md = exportMarkdown(doc);
@@ -418,6 +424,34 @@ describe("exportHtml", () => {
     // Should have both paragraphs
     expect(html).toContain("para1");
     expect(html).toContain("para2");
+  });
+
+  it("places the page-break hr BETWEEN the paragraphs a .pa separates", () => {
+    const doc = createDocument("page one\n.pa\npage two");
+    const html = exportHtml(doc, "Title");
+    expect(html).toContain('<p>page one</p>\n<hr class="page-break">\n<p>page two</p>');
+  });
+
+  it("a mid-document dot line does not leak a join-space into the next paragraph", () => {
+    const doc = createDocument("alpha\n.pa\nbeta");
+    const html = exportHtml(doc, "Title");
+    expect(html).toContain("<p>beta</p>");
+    expect(html).not.toContain("<p> beta</p>");
+  });
+
+  it("renders a ^OC-centered line as <p class=\"centered\"> without leading spaces", () => {
+    // ^OC math: left=0, right=65 -> width 66; col = floor((66 - 9) / 2) = 28
+    const doc = createDocument("normal\n" + " ".repeat(28) + "center me");
+    const html = exportHtml(doc, "Title");
+    expect(html).toContain('<p class="centered">center me</p>');
+    expect(html).toContain(".centered");
+  });
+
+  it("does not treat ordinary indentation as centered", () => {
+    const doc = createDocument("  indented a little");
+    const html = exportHtml(doc, "Title");
+    expect(html).toContain("<p>indented a little</p>");
+    expect(html).not.toContain('class="centered"');
   });
 
   it("joins soft-wrapped lines in paragraphs", () => {
