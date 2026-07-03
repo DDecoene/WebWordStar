@@ -6,7 +6,7 @@ import { isDotLine, scanLayout } from "../shared/dot";
 export type EditorMode = "insert" | "overtype";
 export type Pending = null | "quick" | "block" | "onscreen" | "print" | "help"; // ^Q quick, ^K block, ^O onscreen format, ^P print controls, ^J help
 export type EditKind = "type" | "backspace";
-export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing" | "helpLevel";
+export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing" | "helpLevel" | "export";
 
 export interface HistorySnapshot {
   document: TextDocument;
@@ -46,6 +46,7 @@ export interface EditorState {
   marginRelease: boolean;
   tempIndent: number | null;
   helpLevel: 0 | 1 | 2 | 3;
+  pendingExport: "pdf" | "html" | "txt" | "md" | null;
 }
 
 export interface KeyEvent {
@@ -73,6 +74,7 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     marginRelease: false,
     tempIndent: null,
     helpLevel: 3,
+    pendingExport: null,
   };
 }
 
@@ -451,6 +453,9 @@ function resolveBlock(state: EditorState, key: string): EditorState {
     case "n":
       // Start empty; an empty commit keeps the current name (see applyPromptKey).
       return { ...state, prompt: { label: "DOCUMENT NAME:", buffer: "", target: "filename" } };
+    case "p":
+      // Open export format selection prompt (single-keypress choice).
+      return { ...state, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
     default:
       return state; // prefix already cleared by caller
   }
@@ -633,6 +638,21 @@ function prevWord(doc: TextDocument, pos: Position): Position {
 /** Handle a keystroke while the title/command prompt is active. */
 function applyPromptKey(state: EditorState, ev: KeyEvent): EditorState {
   const prompt = state.prompt!;
+
+  // Export format selection: single keypress choice.
+  if (prompt.target === "export") {
+    if (!ev.ctrl && ev.key === "Escape") {
+      return { ...state, prompt: null };
+    }
+    const key = ev.key.toLowerCase();
+    const exportMap: Record<string, "pdf" | "html" | "txt" | "md"> = { p: "pdf", h: "html", t: "txt", m: "md" };
+    if (key in exportMap) {
+      return { ...state, prompt: null, pendingExport: exportMap[key]! };
+    }
+    // Any other key is ignored (no state change).
+    return state;
+  }
+
   if (!ev.ctrl && ev.key === "Enter") {
     switch (prompt.target) {
       case "filename": {
