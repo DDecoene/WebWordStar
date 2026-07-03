@@ -24,6 +24,8 @@ export interface WsClientHandlers {
 export class WsClient {
   private ws: WebSocket | null = null;
   private retryDelay = 1000;
+  private everOpened = false;
+  private preOpenBuffer: ClientMessage[] = [];
 
   constructor(
     private url: string,
@@ -37,7 +39,13 @@ export class WsClient {
     this.ws = ws;
     ws.addEventListener("open", () => {
       this.retryDelay = 1000;
+      this.everOpened = true;
       this.send({ type: "join", docId: this.docId });
+      // Flush anything sent before the very first connection was established
+      // (e.g. keystrokes during page load); ordering after the join is what
+      // the server expects.
+      for (const m of this.preOpenBuffer) this.send(m);
+      this.preOpenBuffer = [];
     });
     ws.addEventListener("message", (e) => {
       let msg: ServerMessage;
@@ -85,8 +93,17 @@ export class WsClient {
     this.send({ type: "resync", docId: this.docId });
   }
 
-  /** Send if connected; otherwise drop — reconnection re-joins and resyncs. */
+  /**
+   * Send if connected. Before the first connection is established, buffer —
+   * keystrokes during page load must reach the server once it joins. After a
+   * drop, messages are discarded instead: an unacked batch may already have
+   * been applied, and re-sending it after the re-join resync would double it.
+   */
   private send(m: ClientMessage): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(m));
+    } else if (!this.everOpened) {
+      this.preOpenBuffer.push(m);
+    }
   }
 }
