@@ -185,6 +185,30 @@ describe("handleExport endpoint", () => {
     });
   });
 
+  describe("WordStar native export", () => {
+    it("exports the stored content byte-for-byte", async () => {
+      store.create("test-doc");
+      const raw = "hel\x02lo\x02 world\n.lm 10\nline 2";
+      store.saveContent("test-doc", raw);
+
+      const result = await handleExport(store, "test-doc", "ws");
+      expect(result.status).toBe(200);
+      expect(result.contentType).toBe("application/octet-stream");
+      expect(result.body).toBe(raw);
+      expect(result.filename).toBe("UNTITLED.ws");
+    });
+
+    it("sanitizes title into filename", async () => {
+      store.create("test-doc");
+      store.saveTitle("test-doc", "My Doc");
+      store.saveContent("test-doc", "content");
+
+      const result = await handleExport(store, "test-doc", "ws");
+      expect(result.status).toBe(200);
+      expect(result.filename).toBe("My Doc.ws");
+    });
+  });
+
   describe("PDF export", () => {
     it("exports as pdf with correct content type", async () => {
       store.create("test-doc");

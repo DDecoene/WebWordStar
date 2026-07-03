@@ -54,7 +54,7 @@ export async function handleExport(
   body: string | Buffer;
 }> {
   // Validate extension
-  if (!["pdf", "html", "txt", "md"].includes(ext)) {
+  if (!["pdf", "html", "txt", "md", "ws"].includes(ext)) {
     return {
       status: 400,
       contentType: "text/plain; charset=utf-8",
@@ -71,6 +71,16 @@ export async function handleExport(
       contentType: "text/plain; charset=utf-8",
       filename: "",
       body: "not found",
+    };
+  }
+
+  // Native .ws export: the stored content, verbatim, no rendering.
+  if (ext === "ws") {
+    return {
+      status: 200,
+      contentType: "application/octet-stream",
+      filename: `${sanitizeFilename(doc.title)}.ws`,
+      body: doc.content,
     };
   }
 

@@ -43,7 +43,7 @@ test("^K P shows the PRINT/EXPORT prompt and Escape dismisses it", async ({
   await page.keyboard.press("p");
 
   // The prompt should appear on the status bar
-  await expect(status).toContainText("PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown");
+  await expect(status).toContainText("PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar");
 
   // Escape dismisses the prompt
   await page.keyboard.press("Escape");
@@ -234,6 +234,47 @@ test("^K P + P exports PDF: has %PDF magic bytes, filename .pdf", async ({
   const header = buffer.toString("ascii", 0, 4);
 
   expect(header).toBe("%PDF");
+});
+
+test("^K P + W exports native WordStar: preserves control chars and dot lines verbatim", async ({
+  page,
+}) => {
+  await openEditor(page);
+  const screen = page.getByTestId("screen");
+
+  // Type a line with a print control (bold) and a dot command line
+  await page.keyboard.type("Normal text with ");
+  await page.keyboard.press("Control+p");
+  await page.keyboard.press("b");
+  await page.keyboard.type("bold");
+  await page.keyboard.press("Control+p");
+  await page.keyboard.press("b");
+  await page.keyboard.type(" text");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(".lm 5");
+
+  await expect(screen).toContainText("bold");
+  await expect(screen).toContainText(".lm 5");
+
+  // Wait for debounced save to land
+  await page.waitForTimeout(900);
+
+  // Open export prompt and trigger WordStar export
+  const downloadPromise = page.waitForEvent("download");
+  await page.keyboard.press("Control+k");
+  await page.keyboard.press("p");
+  await page.keyboard.press("w");
+
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.ws$/);
+
+  // Read and verify content is the raw stored content, verbatim
+  const content = await readDownloadAsText(await download.path());
+
+  // Unlike .txt, the raw \x02 bold control character is preserved
+  expect(content).toContain("\x02");
+  // The dot line is preserved verbatim
+  expect(content).toContain(".lm 5");
 });
 
 test("export respects document title in filename", async ({ page }) => {

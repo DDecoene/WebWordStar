@@ -83,7 +83,7 @@ if (app) {
     if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
     if (state.pendingExport !== prev.pendingExport && state.pendingExport !== null) {
       // Trigger a download of the export file
-      const extMap: Record<string, string> = { pdf: "pdf", html: "html", txt: "txt", md: "md" };
+      const extMap: Record<string, string> = { pdf: "pdf", html: "html", txt: "txt", md: "md", ws: "ws" };
       const ext = extMap[state.pendingExport];
       const downloadUrl = `/export/${docId}.${ext}`;
       const link = document.createElement("a");
