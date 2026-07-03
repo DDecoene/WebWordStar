@@ -61,12 +61,26 @@ The first release. Work integrates on `release/v1.0.0`.
   `.pa`/`.cp`/`.pn`/`.op`; headers/footers from `.he`/`.fo` in PDF only).
   Server-side renderer (`src/shared/export.ts` + `server/pdf.ts`, pdfkit) and
   HTTP GET endpoint `/export/<docId>.(pdf|html|txt|md)`.
+- **Demo document** — `GET /demo` seeds a fresh, per-visitor document (title "DEMO
+  DOCUMENT") from a showcase template (`src/shared/demo.ts`) exercising every shipped
+  feature, and redirects to it. Vite proxies `/demo` in dev.
+- **Native WordStar export (.ws)** — `^K P` prompt gains a `W` option
+  (`PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar`); `GET /export/<id>.ws`
+  serves the stored content verbatim, round-tripping by construction.
+- **Import / open (`^K R`)** — opens a file picker and POSTs the file (max 2 MB) to
+  `/import`, landing on a new document. `src/shared/wsImport.ts` decodes plain text,
+  native `.ws`, and real WordStar 3.x/4 files (high-bit soft markers stripped to 7-bit,
+  `0x8D` soft returns converted to newlines, soft hyphens dropped, our own print-control
+  characters preserved); WordStar 5+/binary files are rejected with a `400`. The `^K`
+  menu gained "R read (import) file".
 
 ### Fixed
 
 - PDF export: headers, footers, and page numbers are now drawn on **their own
   pages** (via buffered pages) — previously every page's number was stacked in
   the corner of the last page.
+- PDF export: fixed a crash rendering underlined text (pdfkit requires an explicit
+  width for the underline rule).
 - HTML/Markdown export: the page-break `<hr>` now lands **between** the paragraphs a
   `.pa` separates (it trailed the following paragraph), dot lines no longer leak a
   join-space into the next paragraph, `^OC`-centered lines export as

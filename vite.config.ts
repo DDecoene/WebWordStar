@@ -11,6 +11,8 @@ export default defineConfig({
     proxy: {
       "/ws": { target: "ws://localhost:5274", ws: true },
       "/export": { target: "http://localhost:5274" },
+      "/demo": { target: "http://localhost:5274" },
+      "/import": { target: "http://localhost:5274" },
     },
   },
 });

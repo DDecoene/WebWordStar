@@ -30,6 +30,7 @@ export const MENUS: Record<MenuKey, Menu> = {
       ["H", "hide/show block"],
       ["N", "name document"],
       ["P", "print/export"],
+      ["R", "read (import) file"],
     ],
   },
   onscreen: {

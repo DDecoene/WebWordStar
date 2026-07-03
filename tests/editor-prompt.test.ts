@@ -6,12 +6,12 @@ describe("export prompt mode (^KP)", () => {
     let s = createEditorState("body", "UNTITLED");
     s = applyKey(s, { key: "k", ctrl: true });
     s = applyKey(s, { key: "p", ctrl: false });
-    expect(s.prompt).toEqual({ label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" });
+    expect(s.prompt).toEqual({ label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" });
   });
 
   it("pressing P selects PDF export and closes the prompt", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "P", ctrl: false });
     expect(s.pendingExport).toBe("pdf");
     expect(s.prompt).toBeNull();
@@ -19,7 +19,7 @@ describe("export prompt mode (^KP)", () => {
 
   it("pressing p (lowercase) selects PDF export and closes the prompt", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "p", ctrl: false });
     expect(s.pendingExport).toBe("pdf");
     expect(s.prompt).toBeNull();
@@ -27,7 +27,7 @@ describe("export prompt mode (^KP)", () => {
 
   it("pressing H selects HTML export and closes the prompt", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "H", ctrl: false });
     expect(s.pendingExport).toBe("html");
     expect(s.prompt).toBeNull();
@@ -35,7 +35,7 @@ describe("export prompt mode (^KP)", () => {
 
   it("pressing T selects text export and closes the prompt", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "T", ctrl: false });
     expect(s.pendingExport).toBe("txt");
     expect(s.prompt).toBeNull();
@@ -43,15 +43,31 @@ describe("export prompt mode (^KP)", () => {
 
   it("pressing M selects Markdown export and closes the prompt", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "M", ctrl: false });
     expect(s.pendingExport).toBe("md");
     expect(s.prompt).toBeNull();
   });
 
+  it("pressing W selects WordStar export and closes the prompt", () => {
+    let s = createEditorState("body", "UNTITLED");
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
+    s = applyKey(s, { key: "W", ctrl: false });
+    expect(s.pendingExport).toBe("ws");
+    expect(s.prompt).toBeNull();
+  });
+
+  it("pressing w (lowercase) selects WordStar export and closes the prompt", () => {
+    let s = createEditorState("body", "UNTITLED");
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
+    s = applyKey(s, { key: "w", ctrl: false });
+    expect(s.pendingExport).toBe("ws");
+    expect(s.prompt).toBeNull();
+  });
+
   it("Escape cancels the export prompt without setting pendingExport", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "Escape", ctrl: false });
     expect(s.pendingExport).toBeNull();
     expect(s.prompt).toBeNull();
@@ -59,10 +75,10 @@ describe("export prompt mode (^KP)", () => {
 
   it("invalid key in export prompt is ignored (returns unchanged state)", () => {
     let s = createEditorState("body", "UNTITLED");
-    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" } };
+    s = { ...s, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
     s = applyKey(s, { key: "X", ctrl: false });
     // Prompt should still be active
-    expect(s.prompt).toEqual({ label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown", buffer: "", target: "export" });
+    expect(s.prompt).toEqual({ label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" });
     expect(s.pendingExport).toBeNull();
   });
 });

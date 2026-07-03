@@ -207,11 +207,18 @@ function renderLine(
       baselineShift = -supersubOffset;
     }
 
-    // Build text options
+    // Advance width for this run (counting displayable characters, not control
+    // chars). For super/subscript, use the smaller font size.
+    const advanceFontSize = (runFontSize === supersubFontSize ? supersubFontSize : fontSize);
+    const advanceWidth = run.text.length * (advanceFontSize / fontSize) * charWidth;
+
+    // Build text options. pdfkit's underline/strike drawing requires an
+    // explicit width when lineBreak is false, otherwise it computes NaN.
     const textOptions: any = {
       lineBreak: false,
       continued: false,
     };
+    if (run.underline || run.strikeout) textOptions.width = advanceWidth;
     if (run.underline) textOptions.underline = true;
     if (run.strikeout) textOptions.strike = true;
 
@@ -219,10 +226,6 @@ function renderLine(
     pdf.fontSize(runFontSize).font(fontName);
     pdf.text(run.text, currentX, y - baselineShift, textOptions);
 
-    // Advance x by run width (counting displayable characters, not control chars)
-    // For super/subscript, use the smaller font size for advance calculation
-    const advanceFontSize = (runFontSize === supersubFontSize ? supersubFontSize : fontSize);
-    const advanceWidth = run.text.length * (advanceFontSize / fontSize) * charWidth;
     currentX += advanceWidth;
   }
 }

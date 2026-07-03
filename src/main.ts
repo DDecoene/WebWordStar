@@ -83,7 +83,7 @@ if (app) {
     if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
     if (state.pendingExport !== prev.pendingExport && state.pendingExport !== null) {
       // Trigger a download of the export file
-      const extMap: Record<string, string> = { pdf: "pdf", html: "html", txt: "txt", md: "md" };
+      const extMap: Record<string, string> = { pdf: "pdf", html: "html", txt: "txt", md: "md", ws: "ws" };
       const ext = extMap[state.pendingExport];
       const downloadUrl = `/export/${docId}.${ext}`;
       const link = document.createElement("a");
@@ -94,6 +94,35 @@ if (app) {
       document.body.removeChild(link);
       // Clear the pending export flag after triggering the download
       state = { ...state, pendingExport: null };
+    }
+    if (state.pendingImport !== prev.pendingImport && state.pendingImport) {
+      state = { ...state, pendingImport: false };
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".ws,.txt,text/plain";
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        file.arrayBuffer().then((buf) => {
+          const name = file.name.replace(/\.[^./]+$/, "");
+          const title = encodeURIComponent(name || "IMPORTED");
+          return fetch(`/import?title=${title}`, {
+            method: "POST",
+            body: buf,
+            headers: { "content-type": "application/octet-stream" },
+          });
+        }).then(async (res) => {
+          if (!res.ok) {
+            console.error(`import failed: ${res.status} ${await res.text()}`);
+            return;
+          }
+          const { id } = (await res.json()) as { id: string };
+          window.location.href = `${window.location.pathname}?doc=${id}`;
+        }).catch((err) => {
+          console.error("import failed", err);
+        });
+      });
+      input.click();
     }
 
     if (menuTimer) { clearTimeout(menuTimer); menuTimer = null; }

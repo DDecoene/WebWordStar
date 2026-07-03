@@ -6,9 +6,12 @@ import { DocumentStore } from "./DocumentStore";
 import { DocumentSession } from "./DocumentSession";
 import type { ClientMessage, ServerMessage } from "../src/shared/types";
 import { safeStaticPath } from "./staticPath";
+import { randomUUID } from "node:crypto";
 import { createDocument } from "../src/shared/document";
 import { exportText, exportMarkdown, exportHtml } from "../src/shared/export";
 import { exportPdf } from "./pdf";
+import { DEMO_DOCUMENT } from "../src/shared/demo";
+import { decodeWordStar, looksBinary } from "../src/shared/wsImport";
 
 const PORT = Number(process.env.WS_PORT ?? 5274);
 const DB_PATH = process.env.WWS_DB ?? "data/webwordstar.sqlite3";
@@ -52,7 +55,7 @@ export async function handleExport(
   body: string | Buffer;
 }> {
   // Validate extension
-  if (!["pdf", "html", "txt", "md"].includes(ext)) {
+  if (!["pdf", "html", "txt", "md", "ws"].includes(ext)) {
     return {
       status: 400,
       contentType: "text/plain; charset=utf-8",
@@ -69,6 +72,16 @@ export async function handleExport(
       contentType: "text/plain; charset=utf-8",
       filename: "",
       body: "not found",
+    };
+  }
+
+  // Native .ws export: the stored content, verbatim, no rendering.
+  if (ext === "ws") {
+    return {
+      status: 200,
+      contentType: "application/octet-stream",
+      filename: `${sanitizeFilename(doc.title)}.ws`,
+      body: doc.content,
     };
   }
 
@@ -125,9 +138,84 @@ export async function handleExport(
   };
 }
 
+const IMPORT_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/**
+ * Handle import requests: POST /import, body is the raw file bytes.
+ * Creates a new document from the decoded content. Exported for testing
+ * without a live HTTP server.
+ */
+export function handleImport(
+  store: DocumentStore,
+  body: Buffer,
+  title: string,
+): { status: number; contentType: string; body: string } {
+  if (body.length === 0) {
+    return { status: 400, contentType: "text/plain; charset=utf-8", body: "bad request: empty file" };
+  }
+  if (body.length > IMPORT_MAX_BYTES) {
+    return { status: 413, contentType: "text/plain; charset=utf-8", body: "payload too large" };
+  }
+
+  const decoded = decodeWordStar(new Uint8Array(body));
+  if (looksBinary(decoded)) {
+    return {
+      status: 400,
+      contentType: "text/plain; charset=utf-8",
+      body: "unsupported format (WordStar 5+ or binary)",
+    };
+  }
+
+  const id = randomUUID();
+  const docTitle = sanitizeFilename(title || "IMPORTED") || "IMPORTED";
+  store.create(id);
+  store.saveContent(id, decoded);
+  store.saveTitle(id, docTitle);
+
+  return { status: 200, contentType: "application/json", body: JSON.stringify({ id }) };
+}
+
 // Serve the built frontend in production; in dev, Vite serves the app and proxies /ws here.
 const httpServer = createServer(async (req, res) => {
   const urlPath = (req.url ?? "/").split("?")[0]!;
+
+  // Handle demo route: GET /demo -> create a fresh seeded document, redirect to it.
+  if (urlPath === "/demo") {
+    const id = randomUUID();
+    store.create(id);
+    store.saveContent(id, DEMO_DOCUMENT);
+    store.saveTitle(id, "DEMO DOCUMENT");
+    res.writeHead(302, { location: `/?doc=${id}` });
+    res.end();
+    return;
+  }
+
+  // Handle import route: POST /import
+  if (urlPath === "/import" && req.method === "POST") {
+    const fullUrl = new URL(req.url ?? "/", "http://localhost");
+    const title = fullUrl.searchParams.get("title") ?? req.headers["x-document-title"]?.toString() ?? "";
+
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let tooLarge = false;
+    await new Promise<void>((resolvePromise) => {
+      req.on("data", (chunk: Buffer) => {
+        total += chunk.length;
+        if (total > IMPORT_MAX_BYTES) {
+          tooLarge = true;
+          return;
+        }
+        chunks.push(chunk);
+      });
+      req.on("end", () => resolvePromise());
+    });
+
+    const body = tooLarge ? Buffer.alloc(IMPORT_MAX_BYTES + 1) : Buffer.concat(chunks);
+    const result = handleImport(store, body, title);
+    res.writeHead(result.status, { "content-type": result.contentType });
+    res.end(result.body);
+    return;
+  }
 
   // Handle export route: /export/<docId>.<ext>
   if (urlPath.startsWith("/export/")) {
