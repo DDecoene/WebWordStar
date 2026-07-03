@@ -3,7 +3,8 @@
 A clean-room, browser-based reimplementation of **WordStar** for the modern era —
 faithful to the original keyboard-first interface (the diamond cursor, `^K` block
 commands, `^Q` quick commands), extended with always-saved documents and, soon,
-real-time multiuser collaboration over WebSockets.
+real-time multiuser collaboration over WebSockets. Try it instantly with a seeded
+[`/demo`](#running-it) document, or import a real WordStar 3.x/4 file.
 
 ![WebWordStar editor](docs/screenshots/editor.png)
 
@@ -26,6 +27,11 @@ real `PAGE` number in the status line), and **export** (PDF, HTML, Markdown, pla
 text via `^K P` prompt, honouring embedded styles and layout). Still to come in v1.0.0:
 real-time collaboration. See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the
 [`CHANGELOG.md`](CHANGELOG.md).
+
+**Documents in and out:** `GET /demo` seeds a fresh, private feature-showcase document
+and redirects you to it; `^K P` can export the native WordStar-text format (`W`) in
+addition to PDF/HTML/Markdown/plain text; `^K R` opens a file picker to import a
+document, including real WordStar 3.x/4 files (not just plain text or our own `.ws`).
 
 ## Running it
 
@@ -76,7 +82,8 @@ provided as a modern alternative for cursor movement.
 | `^K Y` | Delete the marked block |
 | `^K H` | Hide / show the block highlight |
 | `^K N` | Name the document (inline `DOCUMENT NAME:` prompt) |
-| `^K P` | Export (prompt: `P`=PDF, `H`=HTML, `T`=Text, `M`=Markdown) |
+| `^K P` | Export (prompt: `P`=PDF, `H`=HTML, `T`=Text, `M`=Markdown, `W`=WordStar) |
+| `^K R` | Read (import) a file — opens a file picker |
 
 ### Editing
 

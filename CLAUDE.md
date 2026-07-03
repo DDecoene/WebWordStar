@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, and print/export (PDF/HTML/Markdown/text via `^K P`). Remaining for v1.0.0: real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`). Remaining for v1.0.0: real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -51,7 +51,8 @@ Vite projects; the WS server is on **5274**. Open `http://localhost:5273` → re
 server/
   DocumentStore.ts     SQLite (better-sqlite3, WAL): documents(id, title, content, updated_at)
   DocumentSession.ts   Per-connection: join (load/create), save(content), setTitle
-  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes messages + GET /export/<id>.<fmt>
+  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes messages + GET /export/<id>.<fmt|ws>,
+                       GET /demo (seed + redirect), POST /import (max 2MB)
   staticPath.ts        Path-traversal-safe static file resolver
   pdf.ts               PDF renderer (pdfkit): paginated, honours .lm/.rm/.pl/.mt/.mb/.pa/.cp/.he/.fo/.pn/.op
 
@@ -65,6 +66,9 @@ src/
                        .pa/.cp/.pn/.op/.he/.fo fold-down)
     page.ts            paginate: on-screen page breaks + real page numbers from the layout
     export.ts          Renderers: plainText / markdown / html (honours ^P print controls + dot layout)
+    demo.ts            Feature-showcase document template used to seed GET /demo
+    wsImport.ts        decodeWordStar: imports plain text, native .ws, and WordStar 3.x/4
+                       (high-bit soft markers -> 7-bit, 0x8D soft CR -> newline, soft hyphens dropped)
   editor/
     state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V, ^O, ^P,
                        ^J, editing, prompt mode, undo/redo history)
@@ -112,7 +116,8 @@ Bindings are `Ctrl`+letter (faithful to WordStar). Arrow keys are modern alterna
 | `^K C` / `^K Y` | Copy / delete block |
 | `^K H` | Hide / show block highlight |
 | `^K N` | Name the document (inline `DOCUMENT NAME:` prompt) |
-| `^K P` | Export (prompt: P=PDF H=HTML T=Text M=Markdown) |
+| `^K P` | Export (prompt: P=PDF H=HTML T=Text M=Markdown W=WordStar) |
+| `^K R` | Read (import) a file — opens a file picker |
 
 ### Editing
 | Keys | Action |
@@ -180,6 +185,7 @@ Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 
 - [x] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
 - [x] Layout dot commands (#6) — `.lm`/`.rm`/`.ls`/`.pl`/`.mt`/`.mb`/`.pa`/`.cp`/`.pn`/`.op`/`.he`/`.fo`, full on-screen pagination
 - [x] Print/export (#9) — PDF/HTML/Markdown/plain text, `^K P` prompt, honours ^P controls and layout dot commands
+- [x] Documents in and out (#20) — seeded `/demo` showcase document, native WordStar-text export (`^K P` W, `GET /export/<id>.ws`), and import (`^K R`) of plain text/native/real WordStar 3.x/4 files
 - [ ] Real-time collaboration (#8) — server-authoritative; introduces the operation protocol
 
 Deferred beyond v1.0.0: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip.

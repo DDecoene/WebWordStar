@@ -1,5 +1,9 @@
 # Documents In and Out — Design
 
+**Status: implemented (2026-07-03).** Deviation from this design: the stored document
+content has no representation for WordStar's soft return — imported WordStar soft
+returns are recorded as **hard** returns (documented in `wsImport.ts`).
+
 **Date:** 2026-07-03 · **Milestone:** v1.0.0 · **Follow-up to:** #9 print/export
 
 Three related capabilities: a feature-showcase demo document, native WordStar-text
