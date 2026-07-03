@@ -76,6 +76,9 @@ The first release. Work integrates on `release/v1.0.0`.
 
 ### Fixed
 
+- PDF export: a mid-page `.ls` change no longer rescales the position of the
+  lines above it (which orphaned lines at the bottom of the page) — vertical
+  position now accumulates per line, matching pagination.
 - PDF export: headers, footers, and page numbers are now drawn on **their own
   pages** (via buffered pages) — previously every page's number was stacked in
   the corner of the last page.
