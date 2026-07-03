@@ -64,6 +64,9 @@ The first release. Work integrates on `release/v1.0.0`.
 
 ### Fixed
 
+- PDF export: headers, footers, and page numbers are now drawn on **their own
+  pages** (via buffered pages) — previously every page's number was stacked in
+  the corner of the last page.
 - HTML/Markdown export: the page-break `<hr>` now lands **between** the paragraphs a
   `.pa` separates (it trailed the following paragraph), dot lines no longer leak a
   join-space into the next paragraph, `^OC`-centered lines export as

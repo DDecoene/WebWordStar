@@ -30,6 +30,22 @@ describe("exportPdf", () => {
     expect(pageMatches!.length).toBe(2);
   });
 
+  it("draws each page number on its own page, not stacked on the last (regression)", async () => {
+    // Before switchToPage, every footer number was drawn on the last page.
+    const doc = createDocument("hello world\n.pa\nsecond page text");
+    const buffer = await exportPdf(doc, "Test");
+    const content = buffer.toString("latin1");
+    // Content streams appear in page order (compress: false) with hex-encoded
+    // text. Page 1's stream must contain its own footer number "1" (hex 31)
+    // alongside its text, and not page 2's number.
+    const streams = [...content.matchAll(/stream\r?\n([\s\S]*?)endstream/g)].map((m) => m[1]!);
+    const hex = (s: string) => Buffer.from(s, "latin1").toString("hex");
+    expect(streams[0]).toContain(hex("hello world"));
+    expect(streams[0]).toContain(`<${hex("1")}>`);
+    expect(streams[0]).not.toContain(`<${hex("2")}>`);
+    expect(streams[1]).toContain(`<${hex("2")}>`);
+  });
+
   it("includes text content in the PDF", async () => {
     const doc = createDocument("The quick brown fox");
     const buffer = await exportPdf(doc, "Test");
