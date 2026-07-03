@@ -114,6 +114,7 @@ Each component has one purpose, a defined interface, and is independently testab
 - Renders the document model to **PDF** (paginated; honours `.lm/.rm/.pl/.mt/.mb/.he/.fo/.pa/.cp` etc.), **HTML**, **plain text** (codes stripped), and **Markdown** (formatting runs → Markdown syntax where representable).
 - Pure-ish: model in, artifact out.
 - *Depends on:* document model.
+- **Status:** implemented (2026-07-03). Triggered via `^K P` prompt and GET `/export/<docId>.<ext>` endpoint. HTML export omits headers/footers; PDF includes them.
 
 ---
 

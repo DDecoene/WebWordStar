@@ -81,6 +81,20 @@ if (app) {
 
     if (state.document !== prev.document) scheduleSave(); // content changed
     if (state.filename !== prev.filename) client.setTitle(state.filename); // title committed
+    if (state.pendingExport !== prev.pendingExport && state.pendingExport !== null) {
+      // Trigger a download of the export file
+      const extMap: Record<string, string> = { pdf: "pdf", html: "html", txt: "txt", md: "md" };
+      const ext = extMap[state.pendingExport];
+      const downloadUrl = `/export/${docId}.${ext}`;
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `${state.filename}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Clear the pending export flag after triggering the download
+      state = { ...state, pendingExport: null };
+    }
 
     if (menuTimer) { clearTimeout(menuTimer); menuTimer = null; }
     revealMenu = false;

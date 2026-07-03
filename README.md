@@ -20,9 +20,10 @@ forward, running natively in the browser.
 core (diamond, `^Q`, `^K` block commands, arrow-key alternates, editing), the editor
 core remainder — word wrap and `^B` reflow, a ruler line and flag column, the full
 `^O` onscreen-format menu, `^P` print controls with styled rendering, self-revealing
-menus, help levels, and multi-level undo/redo — plus always-saved persistence, and
+menus, help levels, and multi-level undo/redo — plus always-saved persistence,
 **layout dot commands** with full on-screen pagination (dashed page-break rows, a
-real `PAGE` number in the status line). Still to come in v1.0.0: print/export and
+real `PAGE` number in the status line), and **export** (PDF, HTML, Markdown, plain
+text via `^K P` prompt, honouring embedded styles and layout). Still to come in v1.0.0:
 real-time collaboration. See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the
 [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -75,6 +76,7 @@ provided as a modern alternative for cursor movement.
 | `^K Y` | Delete the marked block |
 | `^K H` | Hide / show the block highlight |
 | `^K N` | Name the document (inline `DOCUMENT NAME:` prompt) |
+| `^K P` | Export (prompt: `P`=PDF, `H`=HTML, `T`=Text, `M`=Markdown) |
 
 ### Editing
 

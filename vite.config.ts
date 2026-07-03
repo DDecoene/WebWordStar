@@ -10,6 +10,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/ws": { target: "ws://localhost:5274", ws: true },
+      "/export": { target: "http://localhost:5274" },
     },
   },
 });
