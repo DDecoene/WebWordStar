@@ -47,6 +47,8 @@ export interface EditorState {
   tempIndent: number | null;
   helpLevel: 0 | 1 | 2 | 3;
   pendingExport: "pdf" | "html" | "txt" | "md" | "ws" | null;
+  /** One-shot signal: ^K R was pressed; main.ts opens the file picker and clears this. */
+  pendingImport: boolean;
 }
 
 export interface KeyEvent {
@@ -75,6 +77,7 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     tempIndent: null,
     helpLevel: 3,
     pendingExport: null,
+    pendingImport: false,
   };
 }
 
@@ -456,6 +459,9 @@ function resolveBlock(state: EditorState, key: string): EditorState {
     case "p":
       // Open export format selection prompt (single-keypress choice).
       return { ...state, prompt: { label: "PRINT/EXPORT: P=PDF H=HTML T=Text M=Markdown W=WordStar", buffer: "", target: "export" } };
+    case "r":
+      // Read/import a file: main.ts opens the file picker on this signal.
+      return { ...state, pendingImport: true };
     default:
       return state; // prefix already cleared by caller
   }
