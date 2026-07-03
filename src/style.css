@@ -86,6 +86,29 @@ body {
   }
 }
 
+/* Peer block cursor (collaboration presence): the peer's color, with a floating name tag. */
+.peer-cursor {
+  position: relative;
+  background: var(--peer-color, #ffb000);
+  color: #0b0b0b;
+  opacity: 0.75;
+}
+
+.peer-cursor::after {
+  content: attr(data-peer);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 0 0.3em;
+  background: var(--peer-color, #ffb000);
+  color: #0b0b0b;
+  font-size: 0.62em;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* Marked block (^KB/^KK) highlight. */
 .block {
   background: #264f78;

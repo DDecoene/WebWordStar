@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join, extname, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { DocumentStore } from "./DocumentStore";
-import { DocumentSession } from "./DocumentSession";
+import { SessionManager } from "./SessionManager";
 import type { ClientMessage, ServerMessage } from "../src/shared/types";
 import { safeStaticPath } from "./staticPath";
 import { randomUUID } from "node:crypto";
@@ -262,10 +262,9 @@ const httpServer = createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ server: httpServer });
+const sessions = new SessionManager(store);
 
 wss.on("connection", (ws) => {
-  let session: DocumentSession | null = null;
-
   ws.on("message", (raw) => {
     let msg: ClientMessage;
     try {
@@ -273,16 +272,54 @@ wss.on("connection", (ws) => {
     } catch {
       return; // ignore malformed input
     }
-    if (msg.type === "join") {
-      session = new DocumentSession(store, msg.docId);
-      const snap = session.join();
-      const out: ServerMessage = { type: "snapshot", docId: msg.docId, content: snap.content, title: snap.title };
-      ws.send(JSON.stringify(out));
-    } else if (msg.type === "save" && session) {
-      session.save(msg.content);
-    } else if (msg.type === "setTitle" && session) {
-      session.setTitle(msg.title);
+    switch (msg.type) {
+      case "join": {
+        const snapshot = sessions.join(ws, msg.docId);
+        ws.send(JSON.stringify(snapshot));
+        sessions.broadcastPresence(msg.docId);
+        break;
+      }
+      case "intent": {
+        const session = sessions.sessionFor(ws);
+        const peer = sessions.peerFor(ws);
+        if (!session || !peer) break;
+        if (!Array.isArray(msg.intents)) break;
+        const applied = session.applyClientIntents(msg.baseRevision, msg.intents, peer.id);
+        if (applied === null) {
+          const err: ServerMessage = { type: "error", docId: msg.docId, message: "intent rejected; resync" };
+          ws.send(JSON.stringify(err));
+          break;
+        }
+        const op: ServerMessage = {
+          type: "op",
+          docId: msg.docId,
+          revision: applied.revision,
+          sourceId: peer.id,
+          clientSeq: msg.clientSeq,
+          intents: applied.intents,
+        };
+        sessions.broadcast(msg.docId, JSON.stringify(op));
+        break;
+      }
+      case "cursor": {
+        sessions.updateCursor(ws, msg.cursor);
+        sessions.broadcastPresence(msg.docId);
+        break;
+      }
+      case "setTitle": {
+        sessions.sessionFor(ws)?.setTitle(msg.title);
+        break;
+      }
+      case "resync": {
+        const snapshot = sessions.snapshotFor(msg.docId, ws);
+        if (snapshot) ws.send(JSON.stringify(snapshot));
+        break;
+      }
     }
+  });
+
+  ws.on("close", () => {
+    sessions.leave(ws);
   });
 });
 

@@ -113,6 +113,32 @@ describe("applyIntent", () => {
     const next = applyIntent(doc, { kind: "splitLine", at: { line: 0, col: 1 } });
     expect(next.lines).toEqual(["a", "b"]);
   });
+
+  it("dispatches multiline insertText via insertMultiline", () => {
+    const doc = createDocument("ad");
+    const next = applyIntent(doc, { kind: "insertText", at: { line: 0, col: 1 }, text: "b\nc" });
+    expect(next.lines).toEqual(["ab", "cd"]);
+    expect(next.returns).toEqual(["hard", "hard"]);
+  });
+
+  it("dispatches splitLine with a soft break", () => {
+    const doc = createDocument("ab");
+    const next = applyIntent(doc, { kind: "splitLine", at: { line: 0, col: 1 }, break: "soft" });
+    expect(next.lines).toEqual(["a", "b"]);
+    expect(next.returns).toEqual(["soft", "hard"]);
+  });
+
+  it("dispatches setReturn", () => {
+    const doc = createDocument("a\nb");
+    const next = applyIntent(doc, { kind: "setReturn", line: 0, return: "soft" });
+    expect(next.returns).toEqual(["soft", "hard"]);
+    expect(next.lines).toEqual(["a", "b"]);
+  });
+
+  it("setReturn throws on out-of-range line", () => {
+    const doc = createDocument("a");
+    expect(() => applyIntent(doc, { kind: "setReturn", line: 5, return: "soft" })).toThrow(RangeError);
+  });
 });
 
 import { getRange, insertMultiline } from "../src/shared/document";

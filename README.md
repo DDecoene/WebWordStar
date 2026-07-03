@@ -2,8 +2,8 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era —
 faithful to the original keyboard-first interface (the diamond cursor, `^K` block
-commands, `^Q` quick commands), extended with always-saved documents and, soon,
-real-time multiuser collaboration over WebSockets. Try it instantly with a seeded
+commands, `^Q` quick commands), extended with always-saved documents and
+**real-time multiuser collaboration** over WebSockets. Try it instantly with a seeded
 [`/demo`](#running-it) document, or import a real WordStar 3.x/4 file.
 
 ![WebWordStar editor](docs/screenshots/editor.png)
@@ -17,16 +17,20 @@ forward, running natively in the browser.
 
 ## Status
 
-**Early but usable.** Working toward the v1.0.0 milestone. Shipped so far: the editor
-core (diamond, `^Q`, `^K` block commands, arrow-key alternates, editing), the editor
-core remainder — word wrap and `^B` reflow, a ruler line and flag column, the full
-`^O` onscreen-format menu, `^P` print controls with styled rendering, self-revealing
-menus, help levels, and multi-level undo/redo — plus always-saved persistence,
-**layout dot commands** with full on-screen pagination (dashed page-break rows, a
-real `PAGE` number in the status line), and **export** (PDF, HTML, Markdown, plain
-text via `^K P` prompt, honouring embedded styles and layout). Still to come in v1.0.0:
-real-time collaboration. See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the
-[`CHANGELOG.md`](CHANGELOG.md).
+**Feature-complete for v1.0.0.** Shipped: the editor core (diamond, `^Q`, `^K` block
+commands, arrow-key alternates, editing), the editor core remainder — word wrap and
+`^B` reflow, a ruler line and flag column, the full `^O` onscreen-format menu, `^P`
+print controls with styled rendering, self-revealing menus, help levels, and
+multi-level undo/redo — plus always-saved persistence, **layout dot commands** with
+full on-screen pagination (dashed page-break rows, a real `PAGE` number in the status
+line), **export** (PDF, HTML, Markdown, plain text via `^K P` prompt, honouring
+embedded styles and layout), and **real-time collaboration**: open the same document
+URL in two browsers and edit together — the server serializes every edit, concurrent
+same-line typing converges, peer cursors show as colored block cursors with name tags
+(`USER 1`, `USER 2`, …), and undo only ever reverts *your own* edits. See the roadmap
+in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
+
+![Real-time collaboration: USER 2's cursor live in USER 1's browser](docs/screenshots/collaboration.png)
 
 **Documents in and out:** `GET /demo` seeds a fresh, private feature-showcase document
 and redirects you to it; `^K P` can export the native WordStar-text format (`W`) in

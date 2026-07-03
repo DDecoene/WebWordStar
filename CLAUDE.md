@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`). Remaining for v1.0.0: real-time collaboration. See [Roadmap](#roadmap) and `CHANGELOG.md`.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`), and real-time collaboration — server-authoritative edit intents with revisions and positional transform, peer cursors with presence, own-edits-only undo. v1.0.0 is feature-complete. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -50,17 +50,25 @@ Vite projects; the WS server is on **5274**. Open `http://localhost:5273` → re
 ```
 server/
   DocumentStore.ts     SQLite (better-sqlite3, WAL): documents(id, title, content, updated_at)
-  DocumentSession.ts   Per-connection: join (load/create), save(content), setTitle
-  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes messages + GET /export/<id>.<fmt|ws>,
+  DocumentSession.ts   Per-document authority: canonical TextDocument + revision, transforms
+                       stale intents past other clients' ops, applies atomically, persists
+                       (debounced + flush), bounded op log
+  SessionManager.ts    Connections <-> documents: peer identity (USER n + color), fan-out
+                       (ops + presence), session cleanup on last leave
+  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes join/intent/
+                       cursor/setTitle/resync + GET /export/<id>.<fmt|ws>,
                        GET /demo (seed + redirect), POST /import (max 2MB)
   staticPath.ts        Path-traversal-safe static file resolver
   pdf.ts               PDF renderer (pdfkit): paginated, honours .lm/.rm/.pl/.mt/.mb/.pa/.cp/.he/.fo/.pn/.op
 
 src/
   shared/
-    types.ts           Shared types: Position, TextDocument, EditIntent, WS ClientMessage/ServerMessage
+    types.ts           Shared types: Position, TextDocument, EditIntent, Peer, WS ClientMessage/ServerMessage
     document.ts        Pure document model (createDocument/getText/insertText/deleteRange/
                        splitLine/applyIntent/getRange/insertMultiline, hard/soft return flags)
+    transform.ts       Positional transform (shift positions/intents past applied ops) and
+                       intent inversion for undo — shared by server serialization and client
+                       reconciliation
     wrap.ts            Word-wrap and ^B paragraph reflow/justification helpers
     dot.ts             Dot-command parser + scanLayout (positional .lm/.rm/.ls/.pl/.mt/.mb/
                        .pa/.cp/.pn/.op/.he/.fo fold-down)
@@ -71,25 +79,35 @@ src/
                        (high-bit soft markers -> 7-bit, 0x8D soft CR -> newline, soft hyphens dropped)
   editor/
     state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V, ^O, ^P,
-                       ^J, editing, prompt mode, undo/redo history)
+                       ^J, editing, prompt mode); emits EditIntents in state.outbox; undo/redo
+                       as an own-intent log with inverses; applyRemoteIntents integrates peer ops
     render.ts          EditorState -> HTML (status line, ruler, flag column, screen, block cursor,
-                       block highlight, print-control styling, menus, prompt)
+                       block highlight, peer cursors with name tags, print-control styling, menus, prompt)
     menus.ts           Self-revealing menu content + help-level gating for ^Q/^K/^O/^P/^J prefixes
   ws/
-    WsClient.ts        Browser WebSocket client (join/save/setTitle, buffering + backoff reconnect)
-  main.ts              Boot: URL/UUID, connect, adopt snapshot, debounced save, wire keydown
+    WsClient.ts        Browser WebSocket client (join/intent/cursor/setTitle/resync,
+                       backoff reconnect + re-join)
+  main.ts              Boot: URL/UUID, connect, snapshot adoption + resync, pending intent
+                       queue with echo/peer-op reconciliation, throttled cursor presence,
+                       wire keydown
   style.css            Terminal aesthetic (status bar, dark monospace screen, block cursor)
 
 data/                  SQLite file (gitignored)
 tests/                 Vitest (*.test.ts) + Playwright (*.spec.ts)
 ```
 
-**Data flow:** keystroke → `applyKey` (pure) → new `EditorState` → `renderEditor` repaints; if the
-`document` reference changed, `main.ts` schedules a debounced `save` (full content) over the socket;
-the server stores it. Documents are identified by a UUID in the URL; the title is set via `^KN`.
+**Data flow:** keystroke → `applyKey` (pure) → new `EditorState` (+ `outbox` of edit intents) →
+`renderEditor` repaints; `main.ts` applies edits optimistically and sends the intents with a
+`baseRevision` over the socket. The server (`DocumentSession`) serializes intents per document,
+transforms stale positions past other clients' intervening ops, assigns a revision, persists
+(debounced), and broadcasts the applied op to every connection — the sender's echo confirms its
+optimistic edit; peers apply the op via `applyRemoteIntents` (shifting cursor/block marks/history).
+Presence (peer cursors) fans out from throttled cursor reports. Any gap or rejection triggers a
+snapshot resync (server wins). Documents are identified by a UUID in the URL; the title is set
+via `^KN`.
 
-> **Persistence is latest-only and single-user for now.** The server stores full content (not
-> operations) — the complete operation protocol and multi-user broadcast arrive with collaboration.
+> **Persistence is latest-only** (no version history yet): the server stores the full content
+> after each applied op (debounced, flushed when the last client disconnects).
 
 ## Implemented commands
 
@@ -186,7 +204,10 @@ Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 
 - [x] Layout dot commands (#6) — `.lm`/`.rm`/`.ls`/`.pl`/`.mt`/`.mb`/`.pa`/`.cp`/`.pn`/`.op`/`.he`/`.fo`, full on-screen pagination
 - [x] Print/export (#9) — PDF/HTML/Markdown/plain text, `^K P` prompt, honours ^P controls and layout dot commands
 - [x] Documents in and out (#20) — seeded `/demo` showcase document, native WordStar-text export (`^K P` W, `GET /export/<id>.ws`), and import (`^K R`) of plain text/native/real WordStar 3.x/4 files
-- [ ] Real-time collaboration (#8) — server-authoritative; introduces the operation protocol
+- [x] Real-time collaboration (#8) — server-authoritative edit intents with revisions and
+  positional transform (`src/shared/transform.ts`), `DocumentSession` authority +
+  `SessionManager` fan-out, peer-cursor presence (`USER n` + color), own-edits-only undo,
+  snapshot resync on conflict/reconnect
 
 Deferred beyond v1.0.0: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip.
 

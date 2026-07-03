@@ -133,10 +133,24 @@ export function insertMultiline(
 export function applyIntent(doc: TextDocument, intent: EditIntent): TextDocument {
   switch (intent.kind) {
     case "insertText":
+      if (intent.text.includes("\n")) {
+        if (intent.at.line < 0 || intent.at.line >= doc.lines.length) {
+          throw new RangeError("insertText: line index out of range");
+        }
+        return insertMultiline(doc, intent.at, intent.text).document;
+      }
       return insertText(doc, intent.at, intent.text);
     case "deleteRange":
       return deleteRange(doc, intent.start, intent.end);
     case "splitLine":
-      return splitLine(doc, intent.at);
+      return splitLine(doc, intent.at, intent.break ?? "hard");
+    case "setReturn": {
+      if (intent.line < 0 || intent.line >= doc.returns.length) {
+        throw new RangeError("setReturn: line index out of range");
+      }
+      const returns = doc.returns.slice();
+      returns[intent.line] = intent.return;
+      return { lines: doc.lines.slice(), returns };
+    }
   }
 }
