@@ -6,9 +6,11 @@ import { DocumentStore } from "./DocumentStore";
 import { DocumentSession } from "./DocumentSession";
 import type { ClientMessage, ServerMessage } from "../src/shared/types";
 import { safeStaticPath } from "./staticPath";
+import { randomUUID } from "node:crypto";
 import { createDocument } from "../src/shared/document";
 import { exportText, exportMarkdown, exportHtml } from "../src/shared/export";
 import { exportPdf } from "./pdf";
+import { DEMO_DOCUMENT } from "../src/shared/demo";
 
 const PORT = Number(process.env.WS_PORT ?? 5274);
 const DB_PATH = process.env.WWS_DB ?? "data/webwordstar.sqlite3";
@@ -128,6 +130,17 @@ export async function handleExport(
 // Serve the built frontend in production; in dev, Vite serves the app and proxies /ws here.
 const httpServer = createServer(async (req, res) => {
   const urlPath = (req.url ?? "/").split("?")[0]!;
+
+  // Handle demo route: GET /demo -> create a fresh seeded document, redirect to it.
+  if (urlPath === "/demo") {
+    const id = randomUUID();
+    store.create(id);
+    store.saveContent(id, DEMO_DOCUMENT);
+    store.saveTitle(id, "DEMO DOCUMENT");
+    res.writeHead(302, { location: `/?doc=${id}` });
+    res.end();
+    return;
+  }
 
   // Handle export route: /export/<docId>.<ext>
   if (urlPath.startsWith("/export/")) {

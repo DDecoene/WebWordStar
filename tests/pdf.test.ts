@@ -46,6 +46,14 @@ describe("exportPdf", () => {
     expect(streams[1]).toContain(`<${hex("2")}>`);
   });
 
+  it("renders underline and strikeout runs without throwing (regression)", async () => {
+    // pdfkit needs an explicit width for underline/strike when lineBreak is
+    // false; without it, exportPdf threw "unsupported number: NaN".
+    const doc = createDocument("a \x13underlined\x13 and \x18struck\x18 word");
+    const buffer = await exportPdf(doc, "Test");
+    expect(buffer.subarray(0, 4).toString("latin1")).toBe("%PDF");
+  });
+
   it("includes text content in the PDF", async () => {
     const doc = createDocument("The quick brown fox");
     const buffer = await exportPdf(doc, "Test");
