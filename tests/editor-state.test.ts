@@ -912,3 +912,115 @@ describe("dot commands in editor", () => {
     expect(col).toBe(9);
   });
 });
+
+import { applyRemoteIntents } from "../src/editor/state";
+import { getText } from "../src/shared/document";
+import type { EditorState } from "../src/editor/state";
+
+function type(state: EditorState, text: string): EditorState {
+  for (const ch of text) state = applyKey(state, { key: ch, ctrl: false });
+  return state;
+}
+
+describe("outbox (collaboration intents)", () => {
+  it("typing a char emits an insertText intent", () => {
+    const s = applyKey(createEditorState(""), { key: "a", ctrl: false });
+    expect(s.outbox).toEqual([{ kind: "insertText", at: { line: 0, col: 0 }, text: "a" }]);
+  });
+
+  it("overtype emits delete + insert", () => {
+    let s = createEditorState("xy");
+    s = applyKey(s, { key: "v", ctrl: true }); // overtype
+    s = applyKey(s, { key: "a", ctrl: false });
+    expect(s.outbox).toEqual([
+      { kind: "deleteRange", start: { line: 0, col: 0 }, end: { line: 0, col: 1 } },
+      { kind: "insertText", at: { line: 0, col: 0 }, text: "a" },
+    ]);
+  });
+
+  it("Enter emits splitLine; movement emits nothing", () => {
+    let s = type(createEditorState(""), "ab");
+    s = applyKey(s, { key: "Enter", ctrl: false });
+    expect(s.outbox).toEqual([{ kind: "splitLine", at: { line: 0, col: 2 } }]);
+    s = applyKey(s, { key: "e", ctrl: true });
+    expect(s.outbox).toEqual([]);
+  });
+
+  it("backspace joining lines emits the joining deleteRange", () => {
+    let s = createEditorState("ab\ncd");
+    s = applyKey(s, { key: "x", ctrl: true }); // down to line 1, col 0
+    s = applyKey(s, { key: "Backspace", ctrl: false });
+    expect(s.outbox).toEqual([
+      { kind: "deleteRange", start: { line: 0, col: 2 }, end: { line: 1, col: 0 } },
+    ]);
+    expect(getText(s.document)).toBe("abcd");
+  });
+
+  it("^KV block move emits delete + insert", () => {
+    let s = createEditorState("one two");
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false }); // mark begin at (0,0)
+    for (let i = 0; i < 4; i++) s = applyKey(s, { key: "d", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false }); // mark end at (0,4)
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "d", ctrl: false }); // end of line
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "v", ctrl: false }); // move
+    expect(getText(s.document)).toBe("twoone ");
+    expect(s.outbox.map((i) => i.kind)).toEqual(["deleteRange", "insertText"]);
+  });
+
+  it("undo emits the inverse intents", () => {
+    let s = type(createEditorState(""), "abc");
+    s = applyKey(s, { key: "u", ctrl: true });
+    expect(getText(s.document)).toBe("");
+    // Coalesced typing undoes as one step: each char's inverse, newest first.
+    expect(s.outbox).toEqual([
+      { kind: "deleteRange", start: { line: 0, col: 2 }, end: { line: 0, col: 3 } },
+      { kind: "deleteRange", start: { line: 0, col: 1 }, end: { line: 0, col: 2 } },
+      { kind: "deleteRange", start: { line: 0, col: 0 }, end: { line: 0, col: 1 } },
+    ]);
+  });
+
+  it("^B reflow emits delete + insert + setReturns", () => {
+    let s = createEditorState("word word word word word word word word word word");
+    s = applyKey(s, { key: "o", ctrl: true });
+    s = applyKey(s, { key: "r", ctrl: false });
+    for (const ch of "30") s = applyKey(s, { key: ch, ctrl: false });
+    s = applyKey(s, { key: "Enter", ctrl: false }); // right margin 30
+    s = applyKey(s, { key: "b", ctrl: true });
+    const kinds = s.outbox.map((i) => i.kind);
+    expect(kinds[0]).toBe("deleteRange");
+    expect(kinds[1]).toBe("insertText");
+    expect(kinds.slice(2).every((k) => k === "setReturn")).toBe(true);
+    expect(s.document.lines.length).toBeGreaterThan(1);
+  });
+});
+
+describe("applyRemoteIntents", () => {
+  it("applies peer intents and shifts the cursor past them", () => {
+    let s = type(createEditorState(""), "world");
+    // Cursor at (0,5); a peer inserts "hi " at line start.
+    s = applyRemoteIntents(s, [{ kind: "insertText", at: { line: 0, col: 0 }, text: "hi " }]);
+    expect(getText(s.document)).toBe("hi world");
+    expect(s.cursor).toEqual({ line: 0, col: 8 });
+  });
+
+  it("keeps undo scoped to own edits after a peer edit", () => {
+    let s = type(createEditorState(""), "abc");
+    s = applyRemoteIntents(s, [{ kind: "insertText", at: { line: 0, col: 3 }, text: "XYZ" }]);
+    s = applyKey(s, { key: "u", ctrl: true }); // undo own "abc" only
+    expect(getText(s.document)).toBe("XYZ");
+  });
+
+  it("shifts block marks past peer edits", () => {
+    let s = type(createEditorState(""), "abcdef");
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "s", ctrl: false }); // start of line
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "b", ctrl: false }); // block start at (0,0)
+    s = applyRemoteIntents(s, [{ kind: "splitLine", at: { line: 0, col: 0 } }]);
+    expect(s.blockStart).toEqual({ line: 1, col: 0 });
+  });
+});

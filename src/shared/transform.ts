@@ -74,10 +74,11 @@ export function transformIntent(intent: EditIntent, op: EditIntent): EditIntent 
       return { ...intent, at: transformPosition(intent.at, op) };
     }
     case "deleteRange": {
-      // Start holds its ground on ties (stays left of concurrent inserts); end yields
-      // (widens over a concurrent insert inside the range).
-      const start = transformPosition(intent.start, op, false);
-      const end = transformPosition(intent.end, op, true);
+      // A concurrent insert exactly at the start is skipped (start shifts past it);
+      // one exactly at the end is spared (end stays put). Inserts strictly inside
+      // widen the range (end shifts because it lies beyond the insert point).
+      const start = transformPosition(intent.start, op, true);
+      const end = transformPosition(intent.end, op, false);
       if (start.line === end.line && start.col === end.col) return null;
       return { ...intent, start, end };
     }

@@ -75,8 +75,8 @@ describe("SessionManager", () => {
     a.messages = [];
     mgr.leave(b);
     const presence = a.messages.find((m) => m.type === "presence");
-    expect(presence).toBeDefined();
-    expect(presence!.type === "presence" && presence.peers).toEqual([]);
+    if (!presence || presence.type !== "presence") throw new Error("no presence broadcast");
+    expect(presence.peers).toEqual([]);
     store.close();
   });
 });

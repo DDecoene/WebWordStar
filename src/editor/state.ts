@@ -1,5 +1,6 @@
-import type { Position, TextDocument } from "../shared/types";
-import { createDocument, insertText, deleteRange, splitLine, getRange, insertMultiline } from "../shared/document";
+import type { EditIntent, Position, TextDocument } from "../shared/types";
+import { createDocument, applyIntent, getRange } from "../shared/document";
+import { insertEnd, invertIntents, transformIntents, transformPosition } from "../shared/transform";
 import { displayWidth, wrapPoint, reflowParagraph } from "../shared/wrap";
 import { isDotLine, scanLayout } from "../shared/dot";
 
@@ -8,9 +9,12 @@ export type Pending = null | "quick" | "block" | "onscreen" | "print" | "help"; 
 export type EditKind = "type" | "backspace";
 export type PromptTarget = "filename" | "leftMargin" | "rightMargin" | "spacing" | "helpLevel" | "export";
 
-export interface HistorySnapshot {
-  document: TextDocument;
-  cursor: Position;
+/** One undoable step: the user's own intents and their ready-to-apply inverses. */
+export interface HistoryEntry {
+  intents: EditIntent[];
+  inverses: EditIntent[]; // reversed order: applying them to the post-state restores the pre-state
+  cursorBefore: Position;
+  cursorAfter: Position;
 }
 
 export interface Ruler {
@@ -39,8 +43,10 @@ export interface EditorState {
   blockEnd: Position | null;
   hideBlock: boolean;
   prompt: { label: string; buffer: string; target: PromptTarget } | null;
-  history: { undo: HistorySnapshot[]; redo: HistorySnapshot[] };
+  history: { undo: HistoryEntry[]; redo: HistoryEntry[] };
   lastEdit: EditKind | null;
+  /** The edit intents this keystroke applied to the document (for the collaboration wire). */
+  outbox: EditIntent[];
   ruler: Ruler;
   showControls: boolean;
   marginRelease: boolean;
@@ -78,6 +84,7 @@ export function createEditorState(text = "", filename = "UNTITLED"): EditorState
     helpLevel: 3,
     pendingExport: null,
     pendingImport: false,
+    outbox: [],
   };
 }
 
@@ -94,42 +101,112 @@ function sealChunk(state: EditorState): EditorState {
   return state.lastEdit === null ? state : { ...state, lastEdit: null };
 }
 
+/** Apply a sequential batch of intents to a document. */
+function applyIntents(doc: TextDocument, intents: EditIntent[]): TextDocument {
+  return intents.reduce(applyIntent, doc);
+}
+
 /**
- * Record the pre-mutation snapshot before an edit of `kind`. Consecutive edits of the
- * same coalescable kind ("type"/"backspace") share one undo step; any other kind (or a
- * change of kind) pushes a fresh snapshot and clears the redo stack.
+ * Apply this keystroke's `intents` to the document, append them to the outbox,
+ * and record them in the undo history. Consecutive edits of the same coalescable
+ * kind ("type"/"backspace") extend one undo entry; any other kind (or a change
+ * of kind) pushes a fresh entry and clears the redo stack.
  */
-function remember(state: EditorState, kind: EditKind | null): EditorState {
-  if (kind !== null && kind === state.lastEdit) return state;
-  const snapshot: HistorySnapshot = { document: state.document, cursor: state.cursor };
-  const undo = [...state.history.undo, snapshot].slice(-UNDO_LIMIT);
-  return { ...state, history: { undo, redo: [] }, lastEdit: kind };
+function edit(
+  state: EditorState,
+  intents: EditIntent[],
+  kind: EditKind | null,
+  cursorAfter: Position,
+): EditorState {
+  const inverses = invertIntents(state.document, intents);
+  const document = applyIntents(state.document, intents);
+  const outbox = [...state.outbox, ...intents];
+
+  let undoStack = state.history.undo;
+  if (kind !== null && kind === state.lastEdit && undoStack.length > 0) {
+    const last = undoStack[undoStack.length - 1]!;
+    undoStack = [
+      ...undoStack.slice(0, -1),
+      {
+        intents: [...last.intents, ...intents],
+        inverses: [...inverses, ...last.inverses], // new edits revert first
+        cursorBefore: last.cursorBefore,
+        cursorAfter,
+      },
+    ];
+  } else {
+    undoStack = [
+      ...undoStack,
+      { intents, inverses, cursorBefore: state.cursor, cursorAfter },
+    ].slice(-UNDO_LIMIT);
+  }
+
+  return {
+    ...state,
+    document,
+    cursor: cursorAfter,
+    history: { undo: undoStack, redo: [] },
+    lastEdit: kind,
+    outbox,
+  };
 }
 
 function undo(state: EditorState): EditorState {
   const { undo: undoStack, redo: redoStack } = state.history;
   if (undoStack.length === 0) return state;
-  const snapshot = undoStack[undoStack.length - 1]!;
-  const current: HistorySnapshot = { document: state.document, cursor: state.cursor };
+  const entry = undoStack[undoStack.length - 1]!;
+  const document = applyIntents(state.document, entry.inverses);
   return {
     ...state,
-    document: snapshot.document,
-    cursor: snapshot.cursor,
-    history: { undo: undoStack.slice(0, -1), redo: [...redoStack, current] },
+    document,
+    cursor: clampCursor(document, entry.cursorBefore),
+    history: { undo: undoStack.slice(0, -1), redo: [...redoStack, entry] },
     lastEdit: null,
+    outbox: [...state.outbox, ...entry.inverses],
   };
 }
 
 function redo(state: EditorState): EditorState {
   const { undo: undoStack, redo: redoStack } = state.history;
   if (redoStack.length === 0) return state;
-  const snapshot = redoStack[redoStack.length - 1]!;
-  const current: HistorySnapshot = { document: state.document, cursor: state.cursor };
+  const entry = redoStack[redoStack.length - 1]!;
+  const document = applyIntents(state.document, entry.intents);
   return {
     ...state,
-    document: snapshot.document,
-    cursor: snapshot.cursor,
-    history: { undo: [...undoStack, current], redo: redoStack.slice(0, -1) },
+    document,
+    cursor: clampCursor(document, entry.cursorAfter),
+    history: { undo: [...undoStack, entry], redo: redoStack.slice(0, -1) },
+    lastEdit: null,
+    outbox: [...state.outbox, ...entry.intents],
+  };
+}
+
+/**
+ * Integrate a peer's applied intents: apply them to the document and shift the
+ * cursor, block marks, and undo/redo history past them. Pure; used by main.ts
+ * when a remote op arrives. Throws if an intent cannot apply (caller resyncs).
+ */
+export function applyRemoteIntents(state: EditorState, intents: EditIntent[]): EditorState {
+  const document = applyIntents(state.document, intents);
+  const shift = (p: Position): Position =>
+    intents.reduce((q, op) => transformPosition(q, op), p);
+  const shiftEntry = (e: HistoryEntry): HistoryEntry => ({
+    intents: transformIntents(e.intents, intents),
+    inverses: transformIntents(e.inverses, intents),
+    cursorBefore: shift(e.cursorBefore),
+    cursorAfter: shift(e.cursorAfter),
+  });
+  const keep = (e: HistoryEntry) => e.intents.length > 0 || e.inverses.length > 0;
+  return {
+    ...state,
+    document,
+    cursor: clampCursor(document, shift(state.cursor)),
+    blockStart: state.blockStart ? shift(state.blockStart) : null,
+    blockEnd: state.blockEnd ? shift(state.blockEnd) : null,
+    history: {
+      undo: state.history.undo.map(shiftEntry).filter(keep),
+      redo: state.history.redo.map(shiftEntry).filter(keep),
+    },
     lastEdit: null,
   };
 }
@@ -150,6 +227,8 @@ function isPrintable(ev: KeyEvent): boolean {
 }
 
 export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
+  // Each keystroke starts with an empty outbox; edits fill it for main.ts to send.
+  if (state.outbox.length > 0) state = { ...state, outbox: [] };
   if (state.prompt) {
     return applyPromptKey(state, ev);
   }
@@ -211,15 +290,13 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
   }
 
   if (!ev.ctrl && ev.key === "Enter") {
-    const withHistory = remember(state, null);
-    const doc = splitLine(withHistory.document, withHistory.cursor);
-    return {
-      ...withHistory,
-      document: doc,
-      cursor: { line: withHistory.cursor.line + 1, col: 0 },
-      tempIndent: null,
-      marginRelease: false,
-    };
+    const next = edit(
+      state,
+      [{ kind: "splitLine", at: state.cursor }],
+      null,
+      { line: state.cursor.line + 1, col: 0 },
+    );
+    return { ...next, tempIndent: null, marginRelease: false };
   }
 
   if (!ev.ctrl && ev.key === "Backspace") {
@@ -249,55 +326,53 @@ export function applyKey(state: EditorState, ev: KeyEvent): EditorState {
 }
 
 function typeChar(state: EditorState, ch: string): EditorState {
-  const withHistory = remember(state, "type");
-  const { document, cursor, mode } = withHistory;
-  const atEndOfLine = cursor.col >= lineLength(document, cursor.line);
-  let doc = document;
+  const { cursor, mode } = state;
+  const intents: EditIntent[] = [];
+  const atEndOfLine = cursor.col >= lineLength(state.document, cursor.line);
   if (mode === "overtype" && !atEndOfLine) {
-    doc = deleteRange(doc, cursor, { line: cursor.line, col: cursor.col + 1 });
+    intents.push({ kind: "deleteRange", start: cursor, end: { line: cursor.line, col: cursor.col + 1 } });
   }
-  doc = insertText(doc, cursor, ch);
+  intents.push({ kind: "insertText", at: cursor, text: ch });
   const newCursor: Position = { line: cursor.line, col: cursor.col + 1 };
-  const next = { ...withHistory, document: doc, cursor: newCursor };
+  let doc = applyIntents(state.document, intents);
 
-  if (!next.ruler.wordWrap || next.marginRelease) return next;
-
+  const wrappable = state.ruler.wordWrap && !state.marginRelease;
   const line = doc.lines[newCursor.line] ?? "";
-  if (isDotLine(line)) return next;
-  const eff = effectiveRuler(next, newCursor.line);
-  if (displayWidth(line) <= eff.right + 1) return next;
+  const eff = effectiveRuler(state, newCursor.line);
+  const needsWrap =
+    wrappable && !isDotLine(line) && displayWidth(line) > eff.right + 1;
+  const breakAt = needsWrap ? wrapPoint(line, eff.right, eff.left) : null;
 
-  const breakAt = wrapPoint(line, eff.right, eff.left);
-  if (breakAt === null) return next;
+  if (breakAt === null) return edit(state, intents, "type", newCursor);
 
   const wasInSpill = newCursor.col > breakAt;
   // Trim a single trailing space at the break point: the space that triggered the
   // break is consumed by the wrap itself, not carried onto either line.
   const trimmedBreak = line[breakAt - 1] === " " ? breakAt - 1 : breakAt;
-  const trailingTrim = breakAt - trimmedBreak;
-  const splitPos: Position = { line: newCursor.line, col: breakAt };
-  let wrappedDoc = splitLine(doc, splitPos, "soft");
-  if (trailingTrim > 0) {
-    wrappedDoc = deleteRange(
-      wrappedDoc,
-      { line: newCursor.line, col: trimmedBreak },
-      { line: newCursor.line, col: breakAt },
-    );
+  intents.push({ kind: "splitLine", at: { line: newCursor.line, col: breakAt }, break: "soft" });
+  if (trimmedBreak < breakAt) {
+    intents.push({
+      kind: "deleteRange",
+      start: { line: newCursor.line, col: trimmedBreak },
+      end: { line: newCursor.line, col: breakAt },
+    });
   }
-  const indent = " ".repeat(next.tempIndent ?? eff.left);
-  const spilled = (wrappedDoc.lines[newCursor.line + 1] ?? "").replace(/^ +/, "");
-  wrappedDoc = deleteRange(
-    wrappedDoc,
-    { line: newCursor.line + 1, col: 0 },
-    { line: newCursor.line + 1, col: (wrappedDoc.lines[newCursor.line + 1] ?? "").length },
-  );
-  wrappedDoc = insertText(wrappedDoc, { line: newCursor.line + 1, col: 0 }, indent + spilled);
+  doc = applyIntents(state.document, intents);
+  const indent = " ".repeat(state.tempIndent ?? eff.left);
+  const spillLine = doc.lines[newCursor.line + 1] ?? "";
+  const spilled = spillLine.replace(/^ +/, "");
+  intents.push({
+    kind: "deleteRange",
+    start: { line: newCursor.line + 1, col: 0 },
+    end: { line: newCursor.line + 1, col: spillLine.length },
+  });
+  intents.push({ kind: "insertText", at: { line: newCursor.line + 1, col: 0 }, text: indent + spilled });
 
   const wrappedCursor: Position = wasInSpill
     ? { line: newCursor.line + 1, col: indent.length + (newCursor.col - breakAt) }
     : newCursor;
 
-  return { ...next, document: wrappedDoc, cursor: wrappedCursor };
+  return edit(state, intents, "type", wrappedCursor);
 }
 
 /** Find the start of the paragraph containing `line` (scan back past soft breaks, never past a dot line). */
@@ -316,41 +391,62 @@ function reflowParagraphAt(state: EditorState): EditorState {
   const { document, cursor } = state;
   if (isDotLine(document.lines[cursor.line] ?? "")) return state;
 
-  const withHistory = remember(state, null);
-  const fromLine = paragraphStart(withHistory.document, cursor.line);
-  const eff = effectiveRuler(withHistory, fromLine);
+  const fromLine = paragraphStart(document, cursor.line);
+  const eff = effectiveRuler(state, fromLine);
 
   // Clamp the reflow range so it never crosses an embedded dot line.
   let endLine = fromLine;
   while (
-    endLine < withHistory.document.lines.length - 1 &&
-    withHistory.document.returns[endLine] !== "hard" &&
-    !isDotLine(withHistory.document.lines[endLine + 1] ?? "")
+    endLine < document.lines.length - 1 &&
+    document.returns[endLine] !== "hard" &&
+    !isDotLine(document.lines[endLine + 1] ?? "")
   )
     endLine++;
 
   const { document: reflowed, position } = reflowParagraph(
-    withHistory.document,
+    document,
     fromLine,
     { left: eff.left, right: eff.right, justify: eff.justify },
     cursor,
     endLine,
   );
-  return sealChunk({ ...withHistory, document: reflowed, cursor: position });
+
+  // Express the reflow as intents: replace the old paragraph span with the new
+  // lines, then fix up the return flags to match the reflowed document.
+  const newCount = reflowed.lines.length - document.lines.length + (endLine - fromLine + 1);
+  const intents: EditIntent[] = [
+    {
+      kind: "deleteRange",
+      start: { line: fromLine, col: 0 },
+      end: { line: endLine, col: lineLength(document, endLine) },
+    },
+    {
+      kind: "insertText",
+      at: { line: fromLine, col: 0 },
+      text: reflowed.lines.slice(fromLine, fromLine + newCount).join("\n"),
+    },
+  ];
+  for (let i = 0; i < newCount; i++) {
+    intents.push({ kind: "setReturn", line: fromLine + i, return: reflowed.returns[fromLine + i]! });
+  }
+  return edit(state, intents, null, position);
 }
 
 function backspace(state: EditorState): EditorState {
   const { document, cursor } = state;
   if (cursor.col > 0) {
-    const withHistory = remember(state, "backspace");
-    const doc = deleteRange(document, { line: cursor.line, col: cursor.col - 1 }, cursor);
-    return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col - 1 } };
+    const start: Position = { line: cursor.line, col: cursor.col - 1 };
+    return edit(state, [{ kind: "deleteRange", start, end: cursor }], "backspace", start);
   }
   if (cursor.line > 0) {
-    const withHistory = remember(state, "backspace");
     const prevLen = lineLength(document, cursor.line - 1);
-    const doc = deleteRange(document, { line: cursor.line - 1, col: prevLen }, { line: cursor.line, col: 0 });
-    return { ...withHistory, document: doc, cursor: { line: cursor.line - 1, col: prevLen } };
+    const start: Position = { line: cursor.line - 1, col: prevLen };
+    return edit(
+      state,
+      [{ kind: "deleteRange", start, end: { line: cursor.line, col: 0 } }],
+      "backspace",
+      start,
+    );
   }
   return state;
 }
@@ -358,14 +454,20 @@ function backspace(state: EditorState): EditorState {
 function deleteForward(state: EditorState): EditorState {
   const { document, cursor } = state;
   if (cursor.col < lineLength(document, cursor.line)) {
-    const withHistory = remember(state, null);
-    const doc = deleteRange(document, cursor, { line: cursor.line, col: cursor.col + 1 });
-    return { ...withHistory, document: doc };
+    return edit(
+      state,
+      [{ kind: "deleteRange", start: cursor, end: { line: cursor.line, col: cursor.col + 1 } }],
+      null,
+      cursor,
+    );
   }
   if (cursor.line < document.lines.length - 1) {
-    const withHistory = remember(state, null);
-    const doc = deleteRange(document, cursor, { line: cursor.line + 1, col: 0 });
-    return { ...withHistory, document: doc };
+    return edit(
+      state,
+      [{ kind: "deleteRange", start: cursor, end: { line: cursor.line + 1, col: 0 } }],
+      null,
+      cursor,
+    );
   }
   return state;
 }
@@ -523,10 +625,13 @@ export const PRINT_CONTROLS: Record<string, string> = {
 function resolvePrint(state: EditorState, key: string): EditorState {
   const ch = PRINT_CONTROLS[key];
   if (!ch) return state;
-  const withHistory = remember(state, null);
-  const { document, cursor } = withHistory;
-  const doc = insertText(document, cursor, ch);
-  return { ...withHistory, document: doc, cursor: { line: cursor.line, col: cursor.col + 1 } };
+  const { cursor } = state;
+  return edit(
+    state,
+    [{ kind: "insertText", at: cursor, text: ch }],
+    null,
+    { line: cursor.line, col: cursor.col + 1 },
+  );
 }
 
 /** Resolve the second key of a ^J help command. Unknown keys just clear the prefix. */
@@ -548,27 +653,36 @@ function centerLine(state: EditorState): EditorState {
   const width = ruler.right - ruler.left + 1;
   const col = Math.max(ruler.left, ruler.left + Math.floor((width - trimmed.length) / 2));
   const newLine = " ".repeat(col) + trimmed;
-  const withHistory = remember(state, null);
-  const doc = deleteRange(withHistory.document, { line: cursor.line, col: 0 }, { line: cursor.line, col: line.length });
-  const inserted = insertText(doc, { line: cursor.line, col: 0 }, newLine);
-  return { ...withHistory, document: inserted, cursor: { line: cursor.line, col: newLine.length } };
+  const intents: EditIntent[] = [
+    { kind: "deleteRange", start: { line: cursor.line, col: 0 }, end: { line: cursor.line, col: line.length } },
+    { kind: "insertText", at: { line: cursor.line, col: 0 }, text: newLine },
+  ];
+  return edit(state, intents, null, { line: cursor.line, col: newLine.length });
 }
 
 function copyBlock(state: EditorState): EditorState {
   const block = orderedBlock(state);
   if (!block) return state;
-  const withHistory = remember(state, null);
-  const text = getRange(withHistory.document, block.start, block.end);
-  const { document, end } = insertMultiline(withHistory.document, withHistory.cursor, text);
-  return { ...withHistory, document, cursor: end, blockStart: null, blockEnd: null };
+  const text = getRange(state.document, block.start, block.end);
+  const next = edit(
+    state,
+    [{ kind: "insertText", at: state.cursor, text }],
+    null,
+    insertEnd(state.cursor, text),
+  );
+  return { ...next, blockStart: null, blockEnd: null };
 }
 
 function deleteBlock(state: EditorState): EditorState {
   const block = orderedBlock(state);
   if (!block) return state;
-  const withHistory = remember(state, null);
-  const document = deleteRange(withHistory.document, block.start, block.end);
-  return { ...withHistory, document, cursor: block.start, blockStart: null, blockEnd: null };
+  const next = edit(
+    state,
+    [{ kind: "deleteRange", start: block.start, end: block.end }],
+    null,
+    block.start,
+  );
+  return { ...next, blockStart: null, blockEnd: null };
 }
 
 function isBeforePosition(a: Position, b: Position): boolean {
@@ -587,9 +701,7 @@ function moveBlock(state: EditorState): EditorState {
   const cursor = state.cursor;
   if (isInsideBlock(cursor, start, end)) return state;
 
-  const withHistory = remember(state, null);
-  const text = getRange(withHistory.document, start, end);
-  const document = deleteRange(withHistory.document, start, end);
+  const text = getRange(state.document, start, end);
 
   let target: Position;
   if (isBeforePosition(cursor, start)) {
@@ -601,14 +713,12 @@ function moveBlock(state: EditorState): EditorState {
     target = { line: start.line, col: start.col + (cursor.col - end.col) };
   }
 
-  const inserted = insertMultiline(document, target, text);
-  return {
-    ...withHistory,
-    document: inserted.document,
-    cursor: inserted.end,
-    blockStart: null,
-    blockEnd: null,
-  };
+  const intents: EditIntent[] = [
+    { kind: "deleteRange", start, end },
+    { kind: "insertText", at: target, text },
+  ];
+  const next = edit(state, intents, null, insertEnd(target, text));
+  return { ...next, blockStart: null, blockEnd: null };
 }
 
 // TODO: Unicode-aware word boundaries (currently ASCII-only via \w)
