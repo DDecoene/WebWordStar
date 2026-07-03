@@ -76,6 +76,10 @@ The first release. Work integrates on `release/v1.0.0`.
 
 ### Fixed
 
+- PDF export: `.he`/`.fo` declared on a page's own leading dot lines (e.g. at the
+  very top of the document) now appear on that page — page 1 previously lost them.
+- Demo document: the "narrower margins" paragraph is now genuinely indented to
+  columns 10–55 (margins govern new typing, not already-typed text).
 - PDF export: a mid-page `.ls` change no longer rescales the position of the
   lines above it (which orphaned lines at the bottom of the page) — vertical
   position now accumulates per line, matching pagination.

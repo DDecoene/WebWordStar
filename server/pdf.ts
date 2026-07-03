@@ -119,9 +119,16 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
     for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
       pdf.switchToPage(pageIdx);
 
-      // Get layout at this page's first line
+      // Get layout at this page's first TEXT line: scanLayout folds commands
+      // strictly before the given line, so scanning at the page's first line
+      // would miss .he/.fo (and margins) declared on the page's own leading
+      // dot lines — WordStar applies those before any text prints.
       const pageFirstLine = pageIdx === 0 ? 0 : breaks[pageIdx - 1]! + 1;
-      const layoutAtPage = scanLayout(doc, pageFirstLine, base);
+      let firstTextLine = pageFirstLine;
+      while (firstTextLine < doc.lines.length && isDotLine(doc.lines[firstTextLine]!)) {
+        firstTextLine++;
+      }
+      const layoutAtPage = scanLayout(doc, firstTextLine, base);
       const pl = layoutAtPage.pageLen;
       const mt = layoutAtPage.marginTop;
       const mb = layoutAtPage.marginBottom;

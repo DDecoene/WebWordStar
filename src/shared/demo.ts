@@ -41,9 +41,12 @@ export const DEMO_DOCUMENT = [
   "",
   ".lm 10",
   ".rm 55",
-  "This paragraph lives inside narrower margins, set with .lm 10",
-  "and .rm 55 -- a dot command changes layout from that line down,",
-  "the same way it did on a real WordStar ruler line.",
+  // Margins govern where NEW typing wraps; existing text stays put. So this
+  // paragraph is authored indented to columns 10-55 to show the layout.
+  "         This paragraph lives inside narrower",
+  "         margins, set with .lm 10 and .rm 55 --",
+  "         a dot command changes the layout from",
+  "         that line down, as on a WordStar ruler.",
   ".lm 1",
   ".rm 65",
   "",
