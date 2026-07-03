@@ -17,7 +17,7 @@ export class DocumentSession {
   revision = 0;
   title: string;
 
-  private opLog: { revision: number; intents: EditIntent[] }[] = [];
+  private opLog: { revision: number; intents: EditIntent[]; sourceId: string }[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -31,7 +31,9 @@ export class DocumentSession {
   }
 
   /**
-   * Transform `intents` past every op since `baseRevision`, apply the batch
+   * Transform `intents` past every op since `baseRevision` — except the
+   * sender's own in-flight ops, whose effect the client had already applied
+   * optimistically when it positioned this intent — then apply the batch
    * atomically, bump the revision, and schedule persistence. Returns the
    * transformed intents (what peers must apply), or null when the baseRevision
    * has fallen out of the op window or any intent fails to apply — in either
@@ -40,6 +42,7 @@ export class DocumentSession {
   applyClientIntents(
     baseRevision: number,
     intents: EditIntent[],
+    sourceId: string,
   ): { revision: number; intents: EditIntent[] } | null {
     if (baseRevision > this.revision) return null;
     const missed = this.opLog.filter((op) => op.revision > baseRevision);
@@ -48,7 +51,7 @@ export class DocumentSession {
 
     const transformed = transformIntents(
       intents,
-      missed.flatMap((op) => op.intents),
+      missed.filter((op) => op.sourceId !== sourceId).flatMap((op) => op.intents),
     );
 
     // All-or-nothing: apply to a scratch document first.
@@ -61,7 +64,7 @@ export class DocumentSession {
 
     this.document = scratch;
     this.revision++;
-    this.opLog.push({ revision: this.revision, intents: transformed });
+    this.opLog.push({ revision: this.revision, intents: transformed, sourceId });
     if (this.opLog.length > this.opWindow) this.opLog.splice(0, this.opLog.length - this.opWindow);
     this.schedulePersist();
     return { revision: this.revision, intents: transformed };

@@ -1020,7 +1020,16 @@ describe("applyRemoteIntents", () => {
     s = applyKey(s, { key: "s", ctrl: false }); // start of line
     s = applyKey(s, { key: "k", ctrl: true });
     s = applyKey(s, { key: "b", ctrl: false }); // block start at (0,0)
-    s = applyRemoteIntents(s, [{ kind: "splitLine", at: { line: 0, col: 0 } }]);
-    expect(s.blockStart).toEqual({ line: 1, col: 0 });
+    s = applyKey(s, { key: "q", ctrl: true });
+    s = applyKey(s, { key: "d", ctrl: false }); // end of line
+    s = applyKey(s, { key: "k", ctrl: true });
+    s = applyKey(s, { key: "k", ctrl: false }); // block end at (0,6)
+    // A peer edit exactly at a mark leaves it anchored (ties hold their ground);
+    // marks after the edit shift with the text.
+    s = applyRemoteIntents(s, [{ kind: "insertText", at: { line: 0, col: 0 }, text: "X" }]);
+    expect(s.blockStart).toEqual({ line: 0, col: 0 });
+    expect(s.blockEnd).toEqual({ line: 0, col: 7 });
+    s = applyRemoteIntents(s, [{ kind: "splitLine", at: { line: 0, col: 3 } }]);
+    expect(s.blockEnd).toEqual({ line: 1, col: 4 });
   });
 });

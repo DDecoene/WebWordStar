@@ -31,6 +31,7 @@ if (app) {
   let pending: { clientSeq: number; intents: EditIntent[] }[] = [];
   let selfId = "";
   let peers: Peer[] = [];
+  let synced = false; // has the initial join snapshot arrived?
 
   const paint = () => {
     app.innerHTML = renderEditor(state, { revealMenu, peers });
@@ -40,21 +41,33 @@ if (app) {
   const client = new WsClient(wsUrl, docId!, {
     onSnapshot: (msg) => {
       // Snapshots are authoritative (join, resync, reconnect): adopt the content
-      // and identity, then replay any unconfirmed local edits as fresh intents.
+      // and identity.
       selfId = msg.selfId;
       peers = msg.peers;
       baseRevision = msg.revision;
-      let document = createDocument(msg.content);
-      const replayed: typeof pending = [];
-      for (const batch of pending) {
+      if (!synced) {
+        // Initial join: keystrokes typed before the snapshot arrived were sent
+        // after the join on the same socket, so the snapshot cannot contain
+        // them — re-apply them on top and keep the local editing state (the
+        // echoes will confirm the pending batches).
+        synced = true;
         try {
-          for (const intent of batch.intents) document = applyIntent(document, intent);
-          replayed.push(batch);
+          let document = createDocument(msg.content);
+          for (const batch of pending) {
+            for (const intent of batch.intents) document = applyIntent(document, intent);
+          }
+          state = { ...state, document, filename: msg.title || state.filename };
+          paint();
+          return;
         } catch {
-          // The document moved under this batch; drop it (server order wins).
+          pending = []; // fall through to a full reset
         }
       }
-      pending = replayed;
+      // Resync (or a failed join replay): an in-flight batch may already be part
+      // of the snapshot, and re-applying it would double it — drop unconfirmed
+      // edits and reset editing state (server wins).
+      pending = [];
+      const document = createDocument(msg.content);
       state = {
         ...state,
         document,
@@ -66,7 +79,6 @@ if (app) {
         lastEdit: null,
         outbox: [],
       };
-      for (const batch of pending) client.sendIntent(baseRevision, batch.clientSeq, batch.intents);
       paint();
     },
     onOp: (msg) => {

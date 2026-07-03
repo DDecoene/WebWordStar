@@ -284,7 +284,7 @@ wss.on("connection", (ws) => {
         const peer = sessions.peerFor(ws);
         if (!session || !peer) break;
         if (!Array.isArray(msg.intents)) break;
-        const applied = session.applyClientIntents(msg.baseRevision, msg.intents);
+        const applied = session.applyClientIntents(msg.baseRevision, msg.intents, peer.id);
         if (applied === null) {
           const err: ServerMessage = { type: "error", docId: msg.docId, message: "intent rejected; resync" };
           ws.send(JSON.stringify(err));

@@ -58,7 +58,7 @@ describe("SessionManager", () => {
     mgr.join(a, "doc1");
     mgr.sessionFor(a)!.applyClientIntents(0, [
       { kind: "insertText", at: { line: 0, col: 0 }, text: "bye" },
-    ]);
+    ], "a");
     mgr.leave(a);
     expect(store.load("doc1")!.content).toBe("bye"); // flushed despite the debounce
     expect(mgr.sessionFor(a)).toBeNull();

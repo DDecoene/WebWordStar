@@ -34,7 +34,7 @@ describe("DocumentSession", () => {
   it("applies an intent at the current revision verbatim and bumps the revision", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1");
-    const result = session.applyClientIntents(0, [ins(0, 0, "hello")]);
+    const result = session.applyClientIntents(0, [ins(0, 0, "hello")], "a");
     expect(result).toEqual({ revision: 1, intents: [ins(0, 0, "hello")] });
     expect(getText(session.document)).toBe("hello");
     store.close();
@@ -43,9 +43,9 @@ describe("DocumentSession", () => {
   it("transforms a stale intent past intervening ops", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1");
-    session.applyClientIntents(0, [ins(0, 0, "hello")]); // rev 1
+    session.applyClientIntents(0, [ins(0, 0, "hello")], "a"); // rev 1
     // A second client, still at rev 0, inserts at what it thinks is col 0.
-    const result = session.applyClientIntents(0, [ins(0, 0, " world")]);
+    const result = session.applyClientIntents(0, [ins(0, 0, " world")], "b");
     expect(result!.revision).toBe(2);
     expect(getText(session.document)).toBe("hello world");
     store.close();
@@ -54,11 +54,11 @@ describe("DocumentSession", () => {
   it("rejects a batch atomically when any intent is out of range", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1");
-    session.applyClientIntents(0, [ins(0, 0, "abc")]);
+    session.applyClientIntents(0, [ins(0, 0, "abc")], "a");
     const result = session.applyClientIntents(1, [
       ins(0, 1, "x"),
       { kind: "splitLine", at: { line: 99, col: 0 } },
-    ]);
+    ], "a");
     expect(result).toBeNull();
     expect(getText(session.document)).toBe("abc");
     expect(session.revision).toBe(1);
@@ -68,15 +68,15 @@ describe("DocumentSession", () => {
   it("returns null for a baseRevision older than the op window", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1", 3); // tiny window
-    for (let i = 0; i < 5; i++) session.applyClientIntents(i, [ins(0, 0, "x")]);
-    expect(session.applyClientIntents(0, [ins(0, 0, "y")])).toBeNull();
+    for (let i = 0; i < 5; i++) session.applyClientIntents(i, [ins(0, 0, "x")], "a");
+    expect(session.applyClientIntents(0, [ins(0, 0, "y")], "b")).toBeNull();
     store.close();
   });
 
   it("flush persists the current content", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1");
-    session.applyClientIntents(0, [ins(0, 0, "persisted")]);
+    session.applyClientIntents(0, [ins(0, 0, "persisted")], "a");
     session.flush();
     expect(store.load("doc1")!.content).toBe("persisted");
     store.close();
@@ -94,11 +94,22 @@ describe("DocumentSession", () => {
   it("two concurrent same-line edits serialize convergently", () => {
     const store = new DocumentStore(":memory:");
     const session = new DocumentSession(store, "doc1");
-    session.applyClientIntents(0, [ins(0, 0, "hello world")]); // rev 1
+    session.applyClientIntents(0, [ins(0, 0, "hello world")], "a"); // rev 1
     // Both clients at rev 1: A inserts at start, B at end.
-    session.applyClientIntents(1, [ins(0, 0, "A")]); // rev 2
-    session.applyClientIntents(1, [ins(0, 11, "B")]); // stale; transformed past A
+    session.applyClientIntents(1, [ins(0, 0, "A")], "a"); // rev 2
+    session.applyClientIntents(1, [ins(0, 11, "B")], "b"); // stale; transformed past A
     expect(getText(session.document)).toBe("Ahello worldB");
+    store.close();
+  });
+
+  it("does not transform a client's intents past its own in-flight ops", () => {
+    const store = new DocumentStore(":memory:");
+    const session = new DocumentSession(store, "doc1");
+    // Client "b" types "br" quickly: both batches sent against revision 0,
+    // but the second was positioned on a document that already has the first.
+    session.applyClientIntents(0, [ins(0, 0, "b")], "b");
+    session.applyClientIntents(0, [ins(0, 1, "r")], "b");
+    expect(getText(session.document)).toBe("br");
     store.close();
   });
 });

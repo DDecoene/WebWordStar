@@ -188,8 +188,10 @@ function redo(state: EditorState): EditorState {
  */
 export function applyRemoteIntents(state: EditorState, intents: EditIntent[]): EditorState {
   const document = applyIntents(state.document, intents);
+  // before=false: a peer edit exactly at a local position leaves it in place
+  // (your cursor doesn't get dragged along by text inserted right at it).
   const shift = (p: Position): Position =>
-    intents.reduce((q, op) => transformPosition(q, op), p);
+    intents.reduce((q, op) => transformPosition(q, op, false), p);
   const shiftEntry = (e: HistoryEntry): HistoryEntry => ({
     intents: transformIntents(e.intents, intents),
     inverses: transformIntents(e.inverses, intents),
