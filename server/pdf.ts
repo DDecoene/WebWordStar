@@ -36,11 +36,14 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
   const { breaks, pageOfLine, pageNumbers, omit } = pagination;
   const pageCount = pageNumbers.length;
 
-  // Create PDF document with compress disabled for test readability
+  // Create PDF document with compress disabled for test readability.
+  // bufferPages keeps every page addressable so headers/footers can be drawn
+  // per page (switchToPage) after the content pass.
   const pdf = new PDFDocument({
     size: "Letter",
     margins: { top: 0, bottom: 0, left: 0, right: 0 },
     compress: false,
+    bufferPages: true,
   });
 
   // Collect PDF data into a buffer
@@ -113,8 +116,12 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
       lineInPage++;
     }
 
-    // Render headers and footers for each page
+    // Render headers and footers onto their own pages via switchToPage —
+    // without it every header/footer lands stacked on the last page, and
+    // text near the bottom edge makes pdfkit auto-add a phantom page.
     for (let pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+      pdf.switchToPage(pageIdx);
+
       // Get layout at this page's first line
       const pageFirstLine = pageIdx === 0 ? 0 : breaks[pageIdx - 1]! + 1;
       const layoutAtPage = scanLayout(doc, pageFirstLine, base);
@@ -149,10 +156,11 @@ export async function exportPdf(doc: TextDocument, _title: string): Promise<Buff
         pdf
           .fontSize(fontSize)
           .font("Courier")
-          .text(pageNumStr, 0, footerY, { align: "center", lineBreak: false });
+          .text(pageNumStr, 0, footerY, { width: 612, align: "center", lineBreak: false });
       }
     }
 
+    pdf.flushPages();
     pdf.end();
   });
 }
