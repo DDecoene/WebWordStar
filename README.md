@@ -30,6 +30,8 @@ same-line typing converges, peer cursors show as colored block cursors with name
 (`USER 1`, `USER 2`, …), and undo only ever reverts *your own* edits. See the roadmap
 in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
 
+![Real-time collaboration: USER 2's cursor live in USER 1's browser](docs/screenshots/collaboration.png)
+
 **Documents in and out:** `GET /demo` seeds a fresh, private feature-showcase document
 and redirects you to it; `^K P` can export the native WordStar-text format (`W`) in
 addition to PDF/HTML/Markdown/plain text; `^K R` opens a file picker to import a
