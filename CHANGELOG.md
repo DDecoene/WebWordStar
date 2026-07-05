@@ -11,6 +11,11 @@ The first release. Work integrates on `release/v1.0.0`.
 
 ### Added
 
+- **Node 22 baseline** — `engines.node >= 22` in `package.json`, an `.nvmrc`, and CI on
+  Node 22 (matching `concurrently@10`'s requirement), so `npm ci` runs without
+  `EBADENGINE` warnings. The remaining `prebuild-install` deprecation notice comes from
+  `better-sqlite3` (latest) and resolves upstream.
+
 - **Foundation** — TypeScript (Vite/Vitest/Playwright, strict), a pure document
   model (`src/shared/document.ts`), shared types, and CI (`unit` + `e2e`).
 - **Editor core** — keyboard-first editing with the WordStar **diamond**

@@ -18,7 +18,7 @@ edits.*
 ## Try it in 30 seconds
 
 ```bash
-npm install && npm run dev
+npm install && npm run dev    # Node 22+
 ```
 
 Then open **http://localhost:5273/demo** — a seeded, private showcase document that
