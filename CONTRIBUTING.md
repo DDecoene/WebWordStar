@@ -49,6 +49,39 @@ A PR is ready when:
 4. `README.md` command tables and the feature list reflect what was built.
 5. Screenshots in `docs/screenshots/` are retaken if the UI changed.
 
+## Clean-room policy (legal ground rules)
+
+WebWordStar is an independent, unaffiliated reimplementation of the WordStar
+interface for educational and preservation purposes (see the README's
+"Trademark & affiliation" section). To keep it legally clean, every
+contribution must follow these rules — they are hard requirements, and PRs
+that violate them will be declined:
+
+1. **Never copy or closely paraphrase text** from WordStar manuals, help
+   screens, error messages, or any other original MicroPro/WordStar
+   documentation. All UI text, help text, and error messages must be written
+   independently, in your own words.
+2. **Never use disassembled or decompiled WordStar binaries, or any original
+   source code, as an implementation reference.** Acceptable sources are:
+   publicly documented behavior (keybindings, dot commands, file-format
+   descriptions), your own testing against `.ws` files, and your own design
+   decisions where the original behavior is ambiguous. If you don't know how
+   a feature originally worked, say so in the issue or PR — don't fill the
+   gap from anything resembling leaked or proprietary source.
+3. **Frame file-format work as interoperability engineering** — reading and
+   writing `.ws` files based on their observed structure — never as
+   reproducing MicroPro's implementation.
+4. **Don't imply affiliation or endorsement.** Nothing in code, docs, commit
+   messages, or announcements may suggest the project is official, licensed,
+   authorized by, or affiliated with any past or present WordStar trademark
+   holder.
+5. **Keep license notices intact.** Source files under `server/` and `src/`
+   carry an SPDX `AGPL-3.0-only` header — keep it when editing and add it to
+   new source files.
+6. If a feature can only be implemented correctly by consulting proprietary
+   or leaked material, **stop and open an issue to discuss it** instead of
+   proceeding.
+
 ## Filing issues
 
 Use GitHub issues. For bugs, include the steps to reproduce, what you expected, and

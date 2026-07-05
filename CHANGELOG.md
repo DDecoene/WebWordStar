@@ -17,6 +17,10 @@ Licensing and attribution hygiene — no editor or server behavior changes.
   WordStar code or documentation text used.
 - SPDX/AGPL-3.0-only license headers on every source file under `server/` and
   `src/` (including `style.css`).
+- CONTRIBUTING.md "Clean-room policy" section: the legal ground rules every
+  contribution must follow (no MicroPro documentation text, no
+  disassembled/original source as a reference, interoperability framing for
+  `.ws` work, no implied affiliation, SPDX headers on new files).
 
 ## [1.0.3] — 2026-07-05
 
