@@ -5,7 +5,7 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
-## [1.0.1]
+## [1.0.1] — 2026-07-05
 
 Open-source repository improvements — no editor changes.
 
