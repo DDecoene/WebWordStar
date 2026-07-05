@@ -50,6 +50,24 @@ export class DocumentStore {
       .run(title, Date.now(), id);
   }
 
+  /**
+   * Delete documents last updated before `cutoffMs`, except those in `keep`
+   * (documents with open sessions). Returns the number deleted.
+   */
+  sweepIdleBefore(cutoffMs: number, keep: ReadonlySet<string>): number {
+    const rows = this.db
+      .prepare("SELECT id FROM documents WHERE updated_at < ?")
+      .all(cutoffMs) as { id: string }[];
+    const del = this.db.prepare("DELETE FROM documents WHERE id = ?");
+    let deleted = 0;
+    for (const { id } of rows) {
+      if (keep.has(id)) continue;
+      del.run(id);
+      deleted++;
+    }
+    return deleted;
+  }
+
   close(): void {
     this.db.close();
   }
