@@ -5,6 +5,32 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
+## [1.0.1]
+
+Open-source repository improvements — no editor changes.
+
+### Added
+
+- **Dev container + one-click Codespaces** — `.devcontainer/devcontainer.json`
+  (Node 22 image, ports 5273/5274 forwarded, auto `npm install` + `npm run dev`)
+  and an "Open in GitHub Codespaces" badge in the README.
+- **Issue templates** — bug report (keystrokes + document pattern) and feature
+  request under `.github/ISSUE_TEMPLATE/`.
+- **SECURITY.md** — private vulnerability reporting via GitHub, and an explicit
+  statement of the security model (unauthenticated, private-by-URL).
+- **README "Deploying" section** — `npm run serve`, ports, the SQLite `data/`
+  directory, hosting requirements, and the security model.
+- **Dependabot** — weekly npm and GitHub Actions update PRs.
+
+### Changed
+
+- README links the WordStar retrospective (`docs/wordstar-retrospective.md`) from
+  the Philosophy section.
+
+### Removed
+
+- Internal working notes under `docs/superpowers/` (now gitignored).
+
 ## [1.0.0] — 2026-07-05
 
 The first release.

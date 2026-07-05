@@ -15,6 +15,13 @@ commands, `^Q` quick commands), extended with always-saved documents and
 same-line typing that converges, and an undo that only ever reverts **your own**
 edits.*
 
+## Try it in one click — no install
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/DDecoene/WebWordStar?quickstart=1)
+
+A Codespace installs the dependencies, starts the dev server, and opens the editor
+preview for you.
+
 ## Try it in 30 seconds
 
 ```bash
@@ -30,7 +37,9 @@ both: that's the collaboration above. Everything auto-saves; there is no save co
 These interfaces were already correct. WordStar's keyboard-driven design let writers
 keep their hands on the keys and their attention on the words, and decades of muscle
 memory proved how well it worked. We're not replacing that design — we're bringing it
-forward, running natively in the browser.
+forward, running natively in the browser. The full argument — what WordStar got
+right and why it's worth reviving — is in
+[the WordStar retrospective](docs/wordstar-retrospective.md).
 
 ## What's in the box (v1.0.0, feature-complete)
 
@@ -76,6 +85,24 @@ npm test               # Vitest unit + integration
 npx playwright test    # Playwright end-to-end (browser)
 npm run build          # type-check + Vite production build
 ```
+
+## Deploying
+
+```bash
+npm run serve      # vite build, then the Node server serves the assets + WebSocket
+```
+
+In production a single Node process serves both the static assets and the WebSocket
+endpoint on **port 5274** (set `WS_PORT` to override). Documents live in a SQLite
+file under `data/` (created on first run) — back up or persist that directory.
+Because collaboration needs a long-lived WebSocket server and a local SQLite file,
+host it on something with a persistent Node process and disk (a VPS, Fly.io,
+Railway, …) — not a serverless/static platform.
+
+**Know the security model before hosting publicly:** WebWordStar has **no
+authentication**. Documents are private-by-URL — the UUID in the URL is the only
+access control, and anyone with a document's URL can read *and edit* it. See
+[SECURITY.md](SECURITY.md).
 
 ## Keyboard reference
 
