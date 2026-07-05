@@ -1,6 +1,6 @@
 {
   "name": "webwordstar",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A clean-room browser-based reimplementation of WordStar with real-time collaborative editing.",
   "license": "AGPL-3.0-only",
   "type": "module",
