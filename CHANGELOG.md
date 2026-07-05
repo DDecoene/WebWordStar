@@ -90,6 +90,9 @@ The first release. Work integrates on `release/v1.0.0`.
   never reverted by your undo). Any revision gap, rejected intent, or reconnect
   triggers a snapshot **resync** (server wins). The full-content `save` message is
   retired; persistence now flows through applied ops.
+- **Collaboration demo GIF** — `scripts/make-demo-gif.mjs` (Playwright, two sessions on
+  the seeded `/demo` document) + `scripts/make-demo-gif.py` (Pillow assembler) produce
+  the side-by-side `docs/screenshots/collaboration.gif` embedded in the README.
 
 ### Fixed
 
