@@ -1,0 +1,17 @@
+{
+  "name": "WebWordStar",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "forwardPorts": [5273, 5274],
+  "portsAttributes": {
+    "5273": {
+      "label": "WebWordStar (open this one)",
+      "onAutoForward": "openPreview"
+    },
+    "5274": {
+      "label": "WebSocket server",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postAttachCommand": "npm run dev"
+}
