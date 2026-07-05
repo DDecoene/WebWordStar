@@ -253,9 +253,20 @@ Node.js · WebSockets (`ws`) · SQLite (`better-sqlite3`) · TypeScript · Vite 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the branching
 model (GitFlow with milestone release branches) and the definition of done.
 
+## Trademark & affiliation
+
+WebWordStar is an independent, clean-room reimplementation built for educational
+and software-preservation purposes, in the same spirit as projects like
+[WordTsar](https://wordtsar.ca/). It is **not** affiliated with, endorsed by, or
+connected to MicroPro International or any past or present holder of the WordStar
+trademark. The name "WordStar" appears here only to describe the historical
+program whose keyboard interface this project reimplements. No original WordStar
+code or documentation text is used: behavior is implemented from publicly
+documented interfaces and independent testing against files.
+
 ## License
 
-[AGPL-3.0-only](LICENSE).
+[AGPL-3.0-only](LICENSE). Source files carry SPDX license headers.
 
 ## Related
 

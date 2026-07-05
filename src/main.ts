@@ -1,3 +1,7 @@
+// This file is part of WebWordStar, an independent reimplementation of the
+// WordStar keyboard interface. Copyright (C) 2026 Dennis Decoene.
+// SPDX-License-Identifier: AGPL-3.0-only (see LICENSE)
+
 import "./style.css";
 import { createEditorState, applyKey, applyRemoteIntents, clampCursor, type EditorState } from "./editor/state";
 import { renderEditor } from "./editor/render";

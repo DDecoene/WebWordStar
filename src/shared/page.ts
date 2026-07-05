@@ -1,3 +1,7 @@
+// This file is part of WebWordStar, an independent reimplementation of the
+// WordStar keyboard interface. Copyright (C) 2026 Dennis Decoene.
+// SPDX-License-Identifier: AGPL-3.0-only (see LICENSE)
+
 import type { TextDocument } from "./types";
 import type { BaseSettings } from "./dot";
 import { isDotLine, parseDotLine } from "./dot";
