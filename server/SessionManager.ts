@@ -116,6 +116,11 @@ export class SessionManager {
     }
   }
 
+  /** Documents that currently have at least one connection. */
+  activeDocIds(): Set<string> {
+    return new Set(this.rooms.keys());
+  }
+
   private roomFor(conn: Connection): DocRoom | null {
     const docId = this.byConnection.get(conn);
     return docId ? (this.rooms.get(docId) ?? null) : null;
