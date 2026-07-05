@@ -5,6 +5,17 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
+## [1.0.3] — 2026-07-05
+
+Dependency maintenance — no editor or server behavior changes.
+
+### Changed
+
+- Dev toolchain majors via Dependabot: TypeScript 5→6, Vite 5→8, Vitest 2→4,
+  `@types/node` 20→26, tsx 4.22→4.23.
+- CI actions: `actions/checkout` 4→7, `actions/setup-node` 4→6,
+  `actions/upload-artifact` 4→7.
+
 ## [1.0.2] — 2026-07-05
 
 Launch preparation — an opt-in demo mode for publicly hosted instances, plus
