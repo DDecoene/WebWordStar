@@ -12,6 +12,7 @@ import { exportText, exportMarkdown, exportHtml } from "../src/shared/export";
 import { exportPdf } from "./pdf";
 import { DEMO_DOCUMENT } from "../src/shared/demo";
 import { decodeWordStar, looksBinary } from "../src/shared/wsImport";
+import { demoConfigFromEnv, SlidingWindowLimiter, ConnectionCounter } from "./demoGuard";
 
 const PORT = Number(process.env.WS_PORT ?? 5274);
 const DB_PATH = process.env.WWS_DB ?? "data/webwordstar.sqlite3";
@@ -175,9 +176,29 @@ export function handleImport(
   return { status: 200, contentType: "application/json", body: JSON.stringify({ id }) };
 }
 
+// Abuse guards for publicly hosted demo instances; inert unless WWS_DEMO=1.
+const demo = demoConfigFromEnv();
+const createLimiter = demo.enabled
+  ? new SlidingWindowLimiter(demo.createPerIpPerHour, 60 * 60 * 1000)
+  : null;
+const connCounter = demo.enabled ? new ConnectionCounter(demo.maxConnPerIp) : null;
+
+function clientIp(req: { socket: { remoteAddress?: string } }): string {
+  return req.socket.remoteAddress ?? "unknown";
+}
+
 // Serve the built frontend in production; in dev, Vite serves the app and proxies /ws here.
 const httpServer = createServer(async (req, res) => {
   const urlPath = (req.url ?? "/").split("?")[0]!;
+
+  // Demo mode: rate-limit the document-creating routes per IP.
+  if (createLimiter && (urlPath === "/demo" || (urlPath === "/import" && req.method === "POST"))) {
+    if (!createLimiter.allow(clientIp(req))) {
+      res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+      res.end("too many documents created from this address; try again later");
+      return;
+    }
+  }
 
   // Handle demo route: GET /demo -> create a fresh seeded document, redirect to it.
   if (urlPath === "/demo") {
@@ -264,8 +285,20 @@ const httpServer = createServer(async (req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 const sessions = new SessionManager(store);
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
+  // Demo mode: cap concurrent connections per IP and message rate per connection.
+  const ip = clientIp(req);
+  if (connCounter && !connCounter.add(ip)) {
+    ws.close(1013, "too many connections from this address");
+    return;
+  }
+  const msgLimiter = demo.enabled ? new SlidingWindowLimiter(demo.msgPer10s, 10_000) : null;
+
   ws.on("message", (raw) => {
+    if (msgLimiter && !msgLimiter.allow("c")) {
+      ws.close(1008, "message rate limit exceeded");
+      return;
+    }
     let msg: ClientMessage;
     try {
       msg = JSON.parse(raw.toString());
@@ -319,9 +352,23 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
+    connCounter?.remove(ip);
     sessions.leave(ws);
   });
 });
+
+// Demo mode: periodically wipe idle documents (never ones with open sessions).
+if (demo.enabled) {
+  const sweep = () => {
+    const cutoff = Date.now() - demo.wipeHours * 60 * 60 * 1000;
+    const deleted = store.sweepIdleBefore(cutoff, sessions.activeDocIds());
+    if (deleted > 0) console.log(`[webwordstar] demo sweep: deleted ${deleted} idle document(s)`);
+    createLimiter?.prune();
+  };
+  sweep();
+  setInterval(sweep, 15 * 60 * 1000).unref();
+  console.log(`[webwordstar] demo mode: wiping documents idle > ${demo.wipeHours}h, rate limits on`);
+}
 
 // Start the server, handling EADDRINUSE gracefully in test environments
 // where the module may be imported multiple times

@@ -4,6 +4,9 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![Vibe](https://img.shields.io/badge/vibe-1978-ffb000)
 
+*The 1978 word processor George R. R. Martin never gave up — in your browser,
+with the one feature it never had: other people.*
+
 A clean-room, browser-based reimplementation of **WordStar** for the modern era —
 faithful to the original keyboard-first interface (the diamond cursor, `^K` block
 commands, `^Q` quick commands), extended with always-saved documents and
@@ -103,6 +106,23 @@ Railway, …) — not a serverless/static platform.
 authentication**. Documents are private-by-URL — the UUID in the URL is the only
 access control, and anyone with a document's URL can read *and edit* it. See
 [SECURITY.md](SECURITY.md).
+
+### Demo mode (public instances)
+
+For a publicly reachable instance, set `WWS_DEMO=1` to turn on abuse guards
+(all off by default, so a private install behaves exactly as before):
+
+| Variable | Default | Effect |
+|---|---|---|
+| `WWS_DEMO` | unset | `1` enables demo mode (everything below) |
+| `WWS_WIPE_HOURS` | `24` | Documents idle longer than this are deleted (checked every 15 min; documents with an open session are never touched) |
+| `WWS_CREATE_PER_IP_PER_HOUR` | `30` | Per-IP hourly cap on document-creating requests (`GET /demo`, `POST /import`) |
+| `WWS_MAX_CONN_PER_IP` | `8` | Max concurrent WebSocket connections per IP |
+| `WWS_MSG_PER_10S` | `400` | Max WebSocket messages per connection per 10 s (exceeding closes the connection) |
+
+Demo mode identifies clients by socket address, so run the Node process directly
+exposed or behind a TCP (layer-4) proxy; behind an HTTP reverse proxy all traffic
+appears to come from one IP and the per-IP limits will bite everyone at once.
 
 ## Keyboard reference
 

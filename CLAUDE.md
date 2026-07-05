@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** **v1.0.0 released 2026-07-05** (tagged, AGPL-3.0-only). Current work: `release/v1.0.1` — open-source repo improvements (devcontainer + Codespaces, issue templates, deployment docs, SECURITY.md, Dependabot). Shipped in v1.0.0: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`), and real-time collaboration — server-authoritative edit intents with revisions and positional transform, peer cursors with presence, own-edits-only undo. v1.0.0 is feature-complete. See [Roadmap](#roadmap) and `CHANGELOG.md`.
+> **Status:** **v1.0.1 released 2026-07-05** (tagged, AGPL-3.0-only). Current work: `release/v1.0.2` — launch prep: opt-in demo mode for publicly hosted instances (`WWS_DEMO=1`: idle-document wipe, per-IP rate limits, connection caps) and README polish. Shipped in v1.0.1: open-source repo improvements (devcontainer + Codespaces, issue templates, deployment docs, SECURITY.md, Dependabot). Shipped in v1.0.0: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`), and real-time collaboration — server-authoritative edit intents with revisions and positional transform, peer cursors with presence, own-edits-only undo. v1.0.0 is feature-complete. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -59,6 +59,11 @@ server/
                        cursor/setTitle/resync + GET /export/<id>.<fmt|ws>,
                        GET /demo (seed + redirect), POST /import (max 2MB)
   staticPath.ts        Path-traversal-safe static file resolver
+  demoGuard.ts         Opt-in abuse guards for public demo instances (WWS_DEMO=1):
+                       sliding-window rate limiter, per-IP connection counter, env
+                       config (WWS_WIPE_HOURS / WWS_CREATE_PER_IP_PER_HOUR /
+                       WWS_MAX_CONN_PER_IP / WWS_MSG_PER_10S); idle-doc sweep wired
+                       in index.ts, never deletes docs with open sessions
   pdf.ts               PDF renderer (pdfkit): paginated, honours .lm/.rm/.pl/.mt/.mb/.pa/.cp/.he/.fo/.pn/.op
 
 src/
@@ -211,7 +216,9 @@ Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 
 
 Milestone **v1.0.1** (repo/open-source improvements, no editor changes): devcontainer + Codespaces badge, issue templates, README deploying section, SECURITY.md (GitHub private vulnerability reporting), Dependabot, `docs/superpowers/` removed and gitignored.
 
-Deferred beyond v1.0.1: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip, live demo hosting.
+Milestone **v1.0.2** (launch prep, no editor changes): opt-in demo mode for publicly hosted instances (#37) — idle-document wipe, per-IP rate limits on document-creating routes, WebSocket connection caps and message rate limits, all gated behind `WWS_DEMO=1` — plus README polish (tagline, demo-mode docs).
+
+Deferred beyond v1.0.2: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip.
 
 ## Testing
 
