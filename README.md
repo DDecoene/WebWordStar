@@ -201,6 +201,15 @@ See `CLAUDE.md` for the full architecture, command tables, and roadmap.
 
 Node.js · WebSockets (`ws`) · SQLite (`better-sqlite3`) · TypeScript · Vite · Vitest · Playwright.
 
+## Contributing
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the branching
+model (GitFlow with milestone release branches) and the definition of done.
+
+## License
+
+[AGPL-3.0-only](LICENSE).
+
 ## Related
 
 Built by the same author as [WebBaseIII](https://github.com/DDecoene/WebBaseIII),

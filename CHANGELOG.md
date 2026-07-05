@@ -5,11 +5,15 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
-## [1.0.0] — Unreleased
+## [1.0.0] — 2026-07-05
 
-The first release. Work integrates on `release/v1.0.0`.
+The first release.
 
 ### Added
+
+- **License and contribution docs** — the project is licensed under **AGPL-3.0-only**
+  (`LICENSE`); `CONTRIBUTING.md` documents setup, the GitFlow branching model, and the
+  definition of done.
 
 - **Node 22 baseline** — `engines.node >= 22` in `package.json`, an `.nvmrc`, and CI on
   Node 22 (matching `concurrently@10`'s requirement), so `npm ci` runs without
