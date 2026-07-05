@@ -5,6 +5,25 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
+## [1.0.2] — 2026-07-05
+
+Launch preparation — an opt-in demo mode for publicly hosted instances, plus
+README polish. No editor changes.
+
+### Added
+
+- **Demo mode (`WWS_DEMO=1`)** — opt-in abuse guards for public instances, all
+  inert by default: idle documents are wiped after `WWS_WIPE_HOURS` (default 24,
+  never while a session is open), document-creating routes (`GET /demo`,
+  `POST /import`) are rate-limited per IP, and WebSocket connections get a
+  per-IP concurrency cap plus a per-connection message rate limit
+  (`server/demoGuard.ts`).
+- **README "Demo mode" subsection** documenting the new environment variables.
+
+### Changed
+
+- README opens with a one-line tagline above the project description.
+
 ## [1.0.1] — 2026-07-05
 
 Open-source repository improvements — no editor changes.
