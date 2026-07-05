@@ -1,12 +1,29 @@
 # WebWordStar
 
+[![CI](https://github.com/DDecoene/WebWordStar/actions/workflows/ci.yml/badge.svg)](https://github.com/DDecoene/WebWordStar/actions/workflows/ci.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![Vibe](https://img.shields.io/badge/vibe-1978-ffb000)
+
 A clean-room, browser-based reimplementation of **WordStar** for the modern era —
 faithful to the original keyboard-first interface (the diamond cursor, `^K` block
 commands, `^Q` quick commands), extended with always-saved documents and
-**real-time multiuser collaboration** over WebSockets. Try it instantly with a seeded
-[`/demo`](#running-it) document, or import a real WordStar 3.x/4 file.
+**real-time multiuser collaboration** over WebSockets.
 
-![WebWordStar editor](docs/screenshots/editor.png)
+![Two sessions editing the demo document live — peer cursors, concurrent same-line typing, own-edits-only undo](docs/screenshots/collaboration.gif)
+
+*Two people, one document, zero mice: peer cursors with name tags, concurrent
+same-line typing that converges, and an undo that only ever reverts **your own**
+edits.*
+
+## Try it in 30 seconds
+
+```bash
+npm install && npm run dev
+```
+
+Then open **http://localhost:5273/demo** — a seeded, private showcase document that
+teaches the keyboard as you read it. Copy the URL into a second window and type in
+both: that's the collaboration above. Everything auto-saves; there is no save command.
 
 ## Philosophy
 
@@ -15,22 +32,27 @@ keep their hands on the keys and their attention on the words, and decades of mu
 memory proved how well it worked. We're not replacing that design — we're bringing it
 forward, running natively in the browser.
 
-## Status
+## What's in the box (v1.0.0, feature-complete)
 
-**Feature-complete for v1.0.0.** Shipped: the editor core (diamond, `^Q`, `^K` block
-commands, arrow-key alternates, editing), the editor core remainder — word wrap and
-`^B` reflow, a ruler line and flag column, the full `^O` onscreen-format menu, `^P`
-print controls with styled rendering, self-revealing menus, help levels, and
-multi-level undo/redo — plus always-saved persistence, **layout dot commands** with
-full on-screen pagination (dashed page-break rows, a real `PAGE` number in the status
-line), **export** (PDF, HTML, Markdown, plain text via `^K P` prompt, honouring
-embedded styles and layout), and **real-time collaboration**: open the same document
-URL in two browsers and edit together — the server serializes every edit, concurrent
-same-line typing converges, peer cursors show as colored block cursors with name tags
-(`USER 1`, `USER 2`, …), and undo only ever reverts *your own* edits. See the roadmap
-in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
+![WebWordStar editor](docs/screenshots/editor.png)
 
-![Two sessions editing the demo document live — peer cursors, concurrent same-line typing, own-edits-only undo](docs/screenshots/collaboration.gif)
+- **The real WordStar interface** — the diamond (`^E`/`^X`/`^S`/`^D`), `^Q` quick
+  movement, `^K` blocks, `^O` onscreen format, `^P` print controls, self-revealing
+  menus with help levels, insert/overtype, word wrap + `^B` reflow, multi-level
+  undo/redo. Arrow keys work too; purists may ignore them.
+- **The terminal look** — blue status bar with `PAGE`/`LINE`/`COL`, ruler line, flag
+  column, blinking block cursor, dashed page-break rows from real pagination.
+- **Layout dot commands** — `.lm`/`.rm`/`.ls`/`.pl`/`.mt`/`.mb`/`.pa`/`.cp`/`.pn`/`.op`/`.he`/`.fo`,
+  folded positionally down the document exactly like 1979.
+- **Real-time collaboration** — server-authoritative edit intents with revisions and
+  positional transform; peer cursors with `USER n` name tags; concurrent same-line
+  edits converge; undo is scoped to your own edits.
+- **Always saved** — UUID document URLs over WebSocket + SQLite; no save command,
+  no `.BAK` files.
+- **Print/export** — PDF, HTML, Markdown, plain text, and native WordStar text via
+  `^K P`, honouring `^P` styles and dot-command layout.
+
+See the roadmap in [`CLAUDE.md`](CLAUDE.md) and the [`CHANGELOG.md`](CHANGELOG.md).
 
 **Documents in and out:** `GET /demo` seeds a fresh, private feature-showcase document
 and redirects you to it; `^K P` can export the native WordStar-text format (`W`) in
@@ -46,8 +68,8 @@ npm run dev        # Vite on http://localhost:5273 + the WebSocket server on :52
 
 Open **http://localhost:5273** — you'll be redirected to a document URL like
 `http://localhost:5273/?doc=<uuid>`. That UUID is the document's identity: bookmark or
-share the URL to return to the same document; open a fresh URL for a new one. Everything
-you type is **saved automatically** — there is no save command.
+share the URL to return to the same document (sharing it is how you invite a
+collaborator); open a fresh URL for a new one.
 
 ```bash
 npm test               # Vitest unit + integration
@@ -62,6 +84,15 @@ layouts a few keys are physically displaced (e.g. `^A`/`^Q` on AZERTY); arrow ke
 provided as a modern alternative for cursor movement.
 
 ### The diamond (cursor movement)
+
+The four movement keys sit in a diamond under your left hand — up is literally
+above down, left is literally left of right:
+
+```
+        ^E
+    ^S      ^D        (^A word left · ^F word right)
+        ^X
+```
 
 | Keys | Move | Alternate |
 |---|---|---|
