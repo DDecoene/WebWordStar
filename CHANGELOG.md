@@ -5,6 +5,19 @@ All notable changes to WebWordStar are documented here. The format follows
 release branches (see `CLAUDE.md`). Nothing is tagged until a `release/vX.Y.Z` branch
 merges to `main`.
 
+## [1.0.4] — Unreleased
+
+Licensing and attribution hygiene — no editor or server behavior changes.
+
+### Added
+
+- README "Trademark & affiliation" section: an explicit disclaimer that
+  WebWordStar is an independent, unaffiliated, clean-room reimplementation for
+  educational/preservation purposes (in the spirit of WordTsar), with no original
+  WordStar code or documentation text used.
+- SPDX/AGPL-3.0-only license headers on every source file under `server/` and
+  `src/` (including `style.css`).
+
 ## [1.0.3] — 2026-07-05
 
 Dependency maintenance — no editor or server behavior changes.

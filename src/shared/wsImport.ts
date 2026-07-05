@@ -1,3 +1,7 @@
+// This file is part of WebWordStar, an independent reimplementation of the
+// WordStar keyboard interface. Copyright (C) 2026 Dennis Decoene.
+// SPDX-License-Identifier: AGPL-3.0-only (see LICENSE)
+
 /**
  * Decoder for imported WordStar 3.x/4 (and plain-text) files, per the
  * "Documents In and Out" design (^K R read file).
