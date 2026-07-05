@@ -4,6 +4,9 @@
   "description": "A clean-room browser-based reimplementation of WordStar with real-time collaborative editing.",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -k -n vite,ws \"vite\" \"tsx watch server/index.ts\"",
     "server": "tsx server/index.ts",
