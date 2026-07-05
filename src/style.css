@@ -1,0 +1,177 @@
+/* WebWordStar — faithful-but-modern terminal aesthetic.
+   Classic WordStar/DOS nod: a highlighted status bar at the top over a dark,
+   monospace editing screen, with an inverse-video block cursor. */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: #0b0b0b;
+  color: #c8c8c8;
+  font-family: "SF Mono", "Menlo", "DejaVu Sans Mono", "Consolas", monospace;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Status line — WordStar's instrument panel, rendered as a bright bar. */
+.status {
+  background: #1f6feb;
+  color: #ffffff;
+  padding: 4px 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: pre;
+  user-select: none;
+}
+
+/* Ruler row — column guide (L/R margins, ! tab stops), shown above the screen. */
+.ruler {
+  padding: 0 10px;
+  color: #6a737d;
+  white-space: pre;
+  user-select: none;
+}
+
+/* Flag column — trailing per-line marker, "<" for a hard return, blank for soft/wrapped. */
+.flag {
+  color: #6a737d;
+}
+
+/* Dot-command line — dimmed like the flag column, since it's layout markup, not text. */
+.dot {
+  color: #6a737d;
+}
+
+/* Page-break row — dimmed dashes inserted between rendered lines at a page boundary. */
+.page-break {
+  color: #6a737d;
+}
+
+/* The editing screen fills the rest of the viewport. */
+.screen {
+  margin: 0;
+  padding: 8px 10px;
+  flex: 1 1 auto;
+  overflow: auto;
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Block cursor — inverse video, gently blinking. */
+.cursor {
+  background: #c8c8c8;
+  color: #0b0b0b;
+  animation: ws-cursor-blink 1.1s step-end infinite;
+}
+
+@keyframes ws-cursor-blink {
+  50% {
+    background: transparent;
+    color: inherit;
+  }
+}
+
+/* Peer block cursor (collaboration presence): the peer's color, with a floating name tag. */
+.peer-cursor {
+  position: relative;
+  background: var(--peer-color, #ffb000);
+  color: #0b0b0b;
+  opacity: 0.75;
+}
+
+.peer-cursor::after {
+  content: attr(data-peer);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding: 0 0.3em;
+  background: var(--peer-color, #ffb000);
+  color: #0b0b0b;
+  font-size: 0.62em;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Marked block (^KB/^KK) highlight. */
+.block {
+  background: #264f78;
+  color: #ffffff;
+}
+
+/* Embedded print-control marker (^P), shown as inverse video, e.g. "B" for bold. */
+.ctrl {
+  background: #0b0b0b;
+  color: #c8c8c8;
+}
+
+/* Print-control (^P) styled text between markers. */
+.fmt-bold {
+  font-weight: bold;
+}
+
+.fmt-underline {
+  text-decoration: underline;
+}
+
+.fmt-italic {
+  font-style: italic;
+}
+
+.fmt-double {
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+.fmt-strike {
+  text-decoration: line-through;
+}
+
+.fmt-super {
+  vertical-align: super;
+  font-size: 0.8em;
+}
+
+.fmt-sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}
+
+/* Self-revealing menu panel — shown after a ^Q/^K/^O/^P/^J prefix is held briefly. */
+.menu {
+  background: #161b22;
+  color: #c8c8c8;
+  border: 1px solid #1f6feb;
+  padding: 6px 10px;
+  white-space: pre;
+  user-select: none;
+}
+
+.menu-title {
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.menu-key {
+  color: #ffffff;
+  background: #1f6feb;
+  padding: 0 3px;
+}

@@ -2,11 +2,36 @@
   "name": "webwordstar",
   "version": "1.0.0",
   "description": "A clean-room browser-based reimplementation of WordStar with real-time collaborative editing.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"(no unit tests yet)\" && exit 0",
-    "test:e2e": "echo \"(no e2e tests yet)\" && exit 0",
-    "build": "echo \"(no build step yet)\" && exit 0"
+    "dev": "concurrently -k -n vite,ws \"vite\" \"tsx watch server/index.ts\"",
+    "server": "tsx server/index.ts",
+    "build": "vite build",
+    "serve": "vite build && tsx server/index.ts",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.19.43",
+    "@types/pdfkit": "^0.17.6",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.3",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "pdfkit": "^0.19.1",
+    "ws": "^8.21.0"
   }
 }

@@ -2,7 +2,7 @@
 
 A clean-room, browser-based reimplementation of **WordStar** for the modern era — faithful to the original keyboard-first interface (the diamond cursor, `^K` block commands, `^Q` quick commands, dot commands), extended with real-time multiuser collaborative editing over WebSockets. Built by the author of [WebBaseIII](https://github.com/DDecoene/WebBaseIII).
 
-> **Status:** early planning stage, active development. Architecture and command tables below will fill in as the project takes shape.
+> **Status:** active development toward v1.0.0. Shipped on `release/v1.0.0`: the editor core (diamond, `^Q`, `^V`, editing), `^K` block commands, arrow-key alternates, always-saved persistence (WebSocket + SQLite), the editor core remainder — word wrap + `^B` reflow, ruler/flag column, the full `^O`/`^P` menus, self-revealing menus, help levels, undo/redo, and block move — layout dot commands with full on-screen pagination, print/export (PDF/HTML/Markdown/text via `^K P`), and documents in/out — a seeded `/demo` document, native WordStar-text export (`^K P` W), and import of plain text/native/WordStar 3.x/4 files (`^K R`), and real-time collaboration — server-authoritative edit intents with revisions and positional transform, peer cursors with presence, own-edits-only undo. v1.0.0 is feature-complete. See [Roadmap](#roadmap) and `CHANGELOG.md`.
 
 ## Git conventions
 
@@ -37,37 +37,179 @@ The flow is **`feature/*` → `release/vX.Y.Z` → `main`**. Branch protection e
 
 ```bash
 npm install
-npm run dev        # dev server; browser frontend + Node WS server
+npm run dev        # Vite on http://localhost:5273 + Node WS server on :5274 (Vite proxies /ws)
+npm run serve      # production: vite build, then the Node server serves assets + WS
 ```
 
-> Scripts are placeholders until the toolchain lands; update this section as `dev`/`build`/`serve` are implemented.
+The dev server uses a **dedicated port 5273** (`strictPort`) to avoid colliding with other
+Vite projects; the WS server is on **5274**. Open `http://localhost:5273` → redirected to
+`?doc=<uuid>`. Documents auto-save (no save command).
 
 ## Architecture
 
-_To be filled in as modules land. Anticipated shape:_
-
 ```
-server/        Node.js HTTP + WebSocket server; per-connection editing session
+server/
+  DocumentStore.ts     SQLite (better-sqlite3, WAL): documents(id, title, content, updated_at)
+  DocumentSession.ts   Per-document authority: canonical TextDocument + revision, transforms
+                       stale intents past other clients' ops, applies atomically, persists
+                       (debounced + flush), bounded op log
+  SessionManager.ts    Connections <-> documents: peer identity (USER n + color), fan-out
+                       (ops + presence), session cleanup on last leave
+  index.ts             Node HTTP (static serving) + WebSocket endpoint; routes join/intent/
+                       cursor/setTitle/resync + GET /export/<id>.<fmt|ws>,
+                       GET /demo (seed + redirect), POST /import (max 2MB)
+  staticPath.ts        Path-traversal-safe static file resolver
+  pdf.ts               PDF renderer (pdfkit): paginated, honours .lm/.rm/.pl/.mt/.mb/.pa/.cp/.he/.fo/.pn/.op
+
 src/
-  editor/      WordStar editing core — diamond cursor, ^K block / ^Q quick / dot commands
-  terminal/    Browser terminal-aesthetic UI
-  collab/      Real-time collaboration (CRDT/OT) over WebSockets
-  ws/          Browser WebSocket client
-  shared/      Shared TS types (WS message shapes, document model)
-data/          SQLite document store
-tests/         Vitest + Playwright suites
+  shared/
+    types.ts           Shared types: Position, TextDocument, EditIntent, Peer, WS ClientMessage/ServerMessage
+    document.ts        Pure document model (createDocument/getText/insertText/deleteRange/
+                       splitLine/applyIntent/getRange/insertMultiline, hard/soft return flags)
+    transform.ts       Positional transform (shift positions/intents past applied ops) and
+                       intent inversion for undo — shared by server serialization and client
+                       reconciliation
+    wrap.ts            Word-wrap and ^B paragraph reflow/justification helpers
+    dot.ts             Dot-command parser + scanLayout (positional .lm/.rm/.ls/.pl/.mt/.mb/
+                       .pa/.cp/.pn/.op/.he/.fo fold-down)
+    page.ts            paginate: on-screen page breaks + real page numbers from the layout
+    export.ts          Renderers: plainText / markdown / html (honours ^P print controls + dot layout)
+    demo.ts            Feature-showcase document template used to seed GET /demo
+    wsImport.ts        decodeWordStar: imports plain text, native .ws, and WordStar 3.x/4
+                       (high-bit soft markers -> 7-bit, 0x8D soft CR -> newline, soft hyphens dropped)
+  editor/
+    state.ts           Pure keystroke reducer: EditorState + applyKey (diamond, ^Q, ^K, ^V, ^O, ^P,
+                       ^J, editing, prompt mode); emits EditIntents in state.outbox; undo/redo
+                       as an own-intent log with inverses; applyRemoteIntents integrates peer ops
+    render.ts          EditorState -> HTML (status line, ruler, flag column, screen, block cursor,
+                       block highlight, peer cursors with name tags, print-control styling, menus, prompt)
+    menus.ts           Self-revealing menu content + help-level gating for ^Q/^K/^O/^P/^J prefixes
+  ws/
+    WsClient.ts        Browser WebSocket client (join/intent/cursor/setTitle/resync,
+                       backoff reconnect + re-join)
+  main.ts              Boot: URL/UUID, connect, snapshot adoption + resync, pending intent
+                       queue with echo/peer-op reconciliation, throttled cursor presence,
+                       wire keydown
+  style.css            Terminal aesthetic (status bar, dark monospace screen, block cursor)
+
+data/                  SQLite file (gitignored)
+tests/                 Vitest (*.test.ts) + Playwright (*.spec.ts)
 ```
 
-## WordStar interface (target)
+**Data flow:** keystroke → `applyKey` (pure) → new `EditorState` (+ `outbox` of edit intents) →
+`renderEditor` repaints; `main.ts` applies edits optimistically and sends the intents with a
+`baseRevision` over the socket. The server (`DocumentSession`) serializes intents per document,
+transforms stale positions past other clients' intervening ops, assigns a revision, persists
+(debounced), and broadcasts the applied op to every connection — the sender's echo confirms its
+optimistic edit; peers apply the op via `applyRemoteIntents` (shifting cursor/block marks/history).
+Presence (peer cursors) fans out from throttled cursor reports. Any gap or rejection triggers a
+snapshot resync (server wins). Documents are identified by a UUID in the URL; the title is set
+via `^KN`.
 
-The keyboard-first command set we are bringing forward:
+> **Persistence is latest-only** (no version history yet): the server stores the full content
+> after each applied op (debounced, flushed when the last client disconnects).
 
-- **Diamond cursor** — `^E` up, `^X` down, `^S` left, `^D` right (word: `^A`/`^F`).
-- **`^K` block commands** — mark/move/copy/delete blocks, save, file ops.
-- **`^Q` quick commands** — quick navigation (line/screen/document ends, find).
-- **Dot commands** — `.`-prefixed formatting directives at column 1.
+## Implemented commands
 
-> Document the exact bindings here as they are implemented, with a Playwright case for each.
+Bindings are `Ctrl`+letter (faithful to WordStar). Arrow keys are modern alternates for movement.
+
+### Cursor movement (the diamond)
+| Keys | Move | Alt |
+|---|---|---|
+| `^E` / `^X` | Up / down a line | `↑` / `↓` |
+| `^S` / `^D` | Left / right a character | `←` / `→` |
+| `^A` / `^F` | Left / right a word | |
+
+### `^Q` quick movement
+| Keys | To |
+|---|---|
+| `^Q S` / `^Q D` | Start / end of line |
+| `^Q E` / `^Q X` | Top / bottom of screen |
+| `^Q R` / `^Q C` | Start / end of document |
+
+### `^K` block & document
+| Keys | Action |
+|---|---|
+| `^K B` / `^K K` | Mark block begin / end |
+| `^K C` / `^K Y` | Copy / delete block |
+| `^K H` | Hide / show block highlight |
+| `^K N` | Name the document (inline `DOCUMENT NAME:` prompt) |
+| `^K P` | Export (prompt: P=PDF H=HTML T=Text M=Markdown W=WordStar) |
+| `^K R` | Read (import) a file — opens a file picker |
+
+### Editing
+| Keys | Action |
+|---|---|
+| `^V` | Toggle insert / overtype |
+| `Enter` / `Backspace` / `^G` | Split line / delete left / delete right |
+| `^B` | Reflow (word-wrap) current paragraph |
+| `^U` | Undo |
+| `^Q U` | Redo |
+| `^K V` | Move marked block to cursor |
+
+### `^O` onscreen format
+| Keys | Action |
+|---|---|
+| `^O L` / `^O R` | Set left / right margin (prompt) |
+| `^O C` | Center current line |
+| `^O S` | Set line spacing (prompt) |
+| `^O J` | Toggle justification |
+| `^O W` | Toggle word wrap |
+| `^O T` | Toggle ruler line |
+| `^O D` | Toggle print-control display |
+| `^O I` / `^O N` | Set / clear tab stop |
+| `^O X` | Release margins |
+| `^O G` | Temporary paragraph indent |
+
+### `^P` print controls
+| Keys | Style |
+|---|---|
+| `^P B` / `^P S` / `^P Y` | Bold / underline / italic |
+| `^P D` / `^P X` | Double-strike / strikeout |
+| `^P T` / `^P V` | Superscript / subscript |
+| `^P O` | Non-break space |
+
+### `^J` help
+| Keys | Action |
+|---|---|
+| `^J H` | Cycle help level (0–3, default 3) |
+
+### Dot commands
+Lines starting with `.` are layout dot commands; they render dimmed with a `.` flag, never wrap, and position-override the `^O` ruler from that line down (parsed/folded in `src/shared/dot.ts`).
+
+| Command | Effect |
+|---|---|
+| `.lm n` | Set left margin to column `n` |
+| `.rm n` | Set right margin to column `n` |
+| `.ls n` | Set line spacing |
+| `.pl n` | Set page length (default 66) |
+| `.mt n` | Set top margin (default 3) |
+| `.mb n` | Set bottom margin (default 8) |
+| `.pa` | Force a page break |
+| `.cp n` | Conditional page break if fewer than `n` lines remain |
+| `.pn n` | Renumber the page |
+| `.op` | Omit page numbers |
+| `.he text` | Set header text (used by the exporter) |
+| `.fo text` | Set footer text (used by the exporter) |
+
+## Roadmap
+
+Milestone **v1.0.0** (issue #5 editor core, #6 dot commands, #7 persistence, #8 collaboration, #9 export):
+
+- [x] Foundation — model, types, toolchain, CI
+- [x] Editor core MVP — diamond, `^Q`, typing, insert/overtype, editing, terminal UI
+- [x] `^K` block commands + arrow-key alternates
+- [x] Persistence — always-saved over WebSocket + SQLite, UUID URLs, `^KN` title
+- [x] Editor core remainder (#5) — `^O`/`^P` prefixes, self-revealing menus, help levels, ruler + flag column, word-wrap + `^B`, block move `^KV`, undo/redo
+- [x] Layout dot commands (#6) — `.lm`/`.rm`/`.ls`/`.pl`/`.mt`/`.mb`/`.pa`/`.cp`/`.pn`/`.op`/`.he`/`.fo`, full on-screen pagination
+- [x] Print/export (#9) — PDF/HTML/Markdown/plain text, `^K P` prompt, honours ^P controls and layout dot commands
+- [x] Documents in and out (#20) — seeded `/demo` showcase document, native WordStar-text export (`^K P` W, `GET /export/<id>.ws`), and import (`^K R`) of plain text/native/real WordStar 3.x/4 files
+- [x] Real-time collaboration (#8) — server-authoritative edit intents with revisions and
+  positional transform (`src/shared/transform.ts`), `DocumentSession` authority +
+  `SessionManager` fan-out, peer-cursor presence (`USER n` + color), own-edits-only undo,
+  snapshot resync on conflict/reconnect
+
+Deferred beyond v1.0.0: version history, MailMerge, strict fidelity mode, legacy `.ws` round-trip.
 
 ## Testing
 
