@@ -1,3 +1,7 @@
+// This file is part of WebWordStar, an independent reimplementation of the
+// WordStar keyboard interface. Copyright (C) 2026 Dennis Decoene.
+// SPDX-License-Identifier: AGPL-3.0-only (see LICENSE)
+
 import type { DocumentStore } from "./DocumentStore";
 import type { EditIntent, TextDocument } from "../src/shared/types";
 import { applyIntent, createDocument, getText } from "../src/shared/document";

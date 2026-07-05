@@ -1,3 +1,7 @@
+// This file is part of WebWordStar, an independent reimplementation of the
+// WordStar keyboard interface. Copyright (C) 2026 Dennis Decoene.
+// SPDX-License-Identifier: AGPL-3.0-only (see LICENSE)
+
 /**
  * Abuse guards for publicly hosted demo instances (WWS_DEMO=1).
  * Everything here is opt-in; a normal self-hosted install never constructs these.
