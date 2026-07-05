@@ -2,7 +2,7 @@
   "name": "webwordstar",
   "version": "1.0.0",
   "description": "A clean-room browser-based reimplementation of WordStar with real-time collaborative editing.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "engines": {
     "node": ">=22"
