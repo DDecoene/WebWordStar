@@ -37,6 +37,9 @@ coverage/
 .DS_Store
 *.swp
 
+# Internal working notes / plans (never committed)
+docs/superpowers/
+
 # Playwright output
 test-results/
 playwright-report/
