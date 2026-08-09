@@ -30,7 +30,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "pdfkit": "^0.19.1",
     "ws": "^8.21.0"
   }
