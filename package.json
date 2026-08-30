@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
-    "pdfkit": "^0.19.1",
+    "pdfkit": "^0.20.1",
     "ws": "^8.21.0"
   }
 }
